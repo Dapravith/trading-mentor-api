@@ -1,3 +1,5 @@
+-- Legacy alert dedupe table retained for migration compatibility.
+-- New durable outbox does not treat this pre-delivery record as "sent".
 CREATE TABLE IF NOT EXISTS signal_alerts (
     symbol VARCHAR(20) NOT NULL,
     candle_interval VARCHAR(10) NOT NULL,

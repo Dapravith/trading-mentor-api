@@ -25,8 +25,21 @@ trading:
   max-allocation: 0.20
   fee-per-side: 0.001
   slippage-per-side: 0.001
+  scan:
+    scheduling-enabled: ${MARKET_SCAN_ENABLED:false}
+    interval-ms: 900000
+    initial-delay-ms: 30000
+  news:
+    intake-enabled: ${HERMES_NEWS_INTAKE_ENABLED:false}
+    ingest-key: ${HERMES_NEWS_INGEST_KEY:}
   alert:
     enabled: true
+    delivery-enabled: ${TELEGRAM_DELIVERY_ENABLED:false}
+    test-endpoint-enabled: ${TELEGRAM_TEST_ALERT_ENABLED:false}
+    telegram-token: ${TELEGRAM_BOT_TOKEN:}
+    telegram-chat-id: ${TELEGRAM_CHAT_ID:}
+    max-attempts: 5
+    dispatch-interval-ms: 60000
 logging:
   level:
     root: INFO

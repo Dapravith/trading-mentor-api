@@ -16,7 +16,7 @@ This is the Java Spring Boot migration of the earlier Python proof of concept, n
 - H2 alert deduplication keyed by `(symbol, interval, candle close)`.
 - A no-LLM Hermes script that sends an alert only for a newly qualifying paper setup.
 
-The project intentionally does **not** have actual BUY/SELL endpoints, Binance account API integration, automated trading, backtesting, an LLM-dependent research agent, or a live price feed. These belong to later phases after rigorous testing.
+The project has no actual BUY/SELL endpoints, Binance account API integration, or live trading. Backtesting is educational. Optional Hermes news research submits structured AI-curated candidates, not independently fact-checked alerts or trade instructions.
 
 ## Step 1 — Prerequisites (macOS)
 
@@ -37,9 +37,16 @@ Java 21 is preferred to avoid unexpected toolchain differences. Java 25 may run 
 
 ## Step 2 — Test and start
 
+**macOS startup fix:** A single embedded H2 file may be opened by only one
+process. If `Database may be already in use [90020]` appears, see the
+[non-destructive H2 lock troubleshooting guide](docs/troubleshooting-h2-lock.md).
+**Do not delete the database file or force-kill unrelated Java processes.**
+
+
 ```bash
 ./gradlew clean test
-./gradlew bootRun
+# Preflight detects a running instance/locked H2 database (non-destructive).
+bash scripts/start-local.sh
 ```
 
 Open a separate terminal:
@@ -66,41 +73,44 @@ Sample status keys:
 
 The sample above is schematic: the real response includes timestamp and indicators, with actual statuses based on fetched market data.
 
-## Step 3 — Test deduplicated alerts locally
+## Step 3 — Connect a Telegram channel (manual account setup)
+
+The Java service now uses a durable Telegram outbox, and includes an
+**opt-in, non-trading connection test**.
+
+**Follow the complete [BotFather → Channel → Test guide](docs/telegram-outbox.md).**
 
 ```bash
-curl -i -X POST http://127.0.0.1:8080/api/v1/alerts/scan
+cp .env.example .env
+chmod 600 .env
+# Fill in the token and channel destination on your computer.
+${EDITOR:-nano} .env
+
+set -a
+source .env
+set +a
+./gradlew bootRun
 ```
 
-- When both pairs have no qualifying setup (or all setups were previously recorded), the response is HTTP **204** without a body.
-- With a new paper setup, the response is HTTP **200**, text-only, including Cambodia-local candle time.
-- If a market data fetch fails, it returns an error; no actionable signal is issued.
-
-*Limitation:* The dedupe record is persisted **before Hermes/Telegram acknowledges delivery**, so a failed send may lose an alert. Treat it as an educational at-most-once publisher; later harden with an outbox + delivery acknowledgements before calling it production-ready.
-
-## Step 4 — Hermes integration
-
-First keep the backend running. Validate your Hermes Telegram gateway and destination.
+Then run this in another terminal:
 
 ```bash
-hermes gateway status
-hermes cron list
-bash scripts/install-hermes-scan.sh
+curl -sS -X POST http://127.0.0.1:8080/api/v1/alerts/test
+curl -sS http://127.0.0.1:8080/api/v1/alerts/status
 ```
 
-**Important:** If the earlier Python trading mentor is already scheduled, disable/delete that cron job first to avoid two separate bots sending duplicate alerts. Inspect the list and follow Hermes CLI commands for your installed version.
+With both `TELEGRAM_DELIVERY_ENABLED=true` and
+`TELEGRAM_TEST_ALERT_ENABLED=true`, the test queues a visible Telegram
+**CONNECTION TEST**, not a trading recommendation. The Java worker retries
+transient failures and marks `SENT` only after Telegram API acknowledgement.
+After confirming your private test channel receives it, disable the test
+endpoint by setting `TELEGRAM_TEST_ALERT_ENABLED=false` and restarting.
 
-Then register only one job (after confirming Hermes CLI supports the shown cron flags):
-
-```bash
-hermes cron create 'every 15m' \
-  --no-agent \
-  --script ai-trading-mentor-java-scan.sh \
-  --deliver telegram \
-  --name 'AI Trading Mentor Java Paper Watch'
-```
-
-The Hermes script `scripts/hermes-scan.sh` uses `curl` against the local Spring Boot endpoint and prints output only for fresh educational setup alerts. Telegram delivery is handled by Hermes. This script is not an autonomous LLM trading system.
+The scan endpoint remains `POST /api/v1/alerts/scan`, which only queues
+qualifying **paper research** setups. No market setup means no signal message.
+Hermes can trigger the scan, but must not deliver a second copy of the alert.
+No Binance account credentials, trade execution, or automatic news-feed
+Telegram posting exist in this version.
 
 ## Architecture
 
@@ -195,3 +205,40 @@ Official references:
 - Spring Boot: https://docs.spring.io/spring-boot/reference/
 - Gradle wrapper: https://docs.gradle.org/current/userguide/gradle_wrapper.html
 - Binance public endpoints: https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md
+
+## Automated market monitoring and Hermes global news (PR #8)
+
+Read [docs/automation-setup.md](docs/automation-setup.md) to complete local setup.
+Both automation features are off by default.
+
+- `MARKET_SCAN_ENABLED=true` schedules Java scans of completed BTC/ETH 4h candles every 15 minutes. The same outbox ensures one alert per setup. Disable any older Hermes market-scan job.
+- `GET /api/v1/alerts/events/{eventId}` exposes the actual Telegram provider acknowledgement and message ID, without exposing message contents.
+- `HERMES_NEWS_INTAKE_ENABLED=true` enables a loopback-only, independently secret-gated news intake. Hermes can research market-moving events and submit vetted metadata by calling `scripts/submit-hermes-news.sh`.
+- Hermes research jobs deliver **locally**, never directly to Telegram; Java is the single delivery owner for all alerts.
+- The research intake validates source domains, freshness, event identity, and mandatory risk/impact fields. **It does not verify page contents independently.** Messages are labeled AI-curated.
+
+This automation runs only while Spring Boot and the configured Hermes gateway are online.
+No live exchange API keys or trading endpoints are included.
+
+## Three remaining local acceptance checks
+
+The BotFather token and chat ID are stored only in your local `.env`, not
+in this GitHub repository. To finish operator setup:
+
+1. With `TELEGRAM_DELIVERY_ENABLED=true` and
+   `TELEGRAM_TEST_ALERT_ENABLED=true`, start one backend via
+   `bash scripts/start-local.sh`, then in another terminal run
+   `bash scripts/verify-telegram-delivery.sh`. This creates a test message,
+   polls its persisted event and verifies `SENT` and Telegram `message_id`.
+   Also visually check the intended channel.
+2. Change `.env` to `MARKET_SCAN_ENABLED=true` and
+   `TELEGRAM_TEST_ALERT_ENABLED=false`, restart the backend. Java owns
+   the 15-minute completed-candle scan; disable older Hermes market crons.
+3. Configure a strong `HERMES_NEWS_INGEST_KEY`, set
+   `HERMES_NEWS_INTAKE_ENABLED=true`, restart the backend and run
+   `bash scripts/install-hermes-news-local.sh` in a second terminal.
+   The installer checks the endpoint and refuses an existing job.
+
+See [Complete local activation runbook](docs/automation-setup.md).
+Neither CI success nor registration of a cron job proves that your local
+Hermes browser or Telegram destination has been exercised end-to-end.
