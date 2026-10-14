@@ -52,6 +52,41 @@ public class AlertRepository {
         }
     }
 
+    /** External news events use the same deduplication and acknowledgement path. */
+    public boolean enqueueNews(String id, long eventAtMs, String message) {
+        if (!id.matches("hermes-news-v1:[a-z0-9][a-z0-9-]{8,119}")
+            || message.isBlank() || message.length() > 3500) {
+            throw new IllegalArgumentException("Invalid news event payload");
+        }
+        long now = System.currentTimeMillis();
+        try {
+            return jdbc.update("""
+                INSERT INTO alert_outbox
+                  (id, symbol, candle_interval, candle_close_ms, strategy_version,
+                   payload, status, attempts, next_attempt_ms, created_at_ms)
+                VALUES (?, 'NEWS', 'event', ?, 'hermes-news-v1', ?, 'PENDING', 0, ?, ?)
+                """, id, eventAtMs, message, now, now) == 1;
+        } catch (DuplicateKeyException duplicate) {
+            return false;
+        }
+    }
+
+    public OutboxEventStatus eventStatus(String id) {
+        if (id == null || id.isBlank() || id.length() > 160) {
+            throw new IllegalArgumentException("Invalid event identifier");
+        }
+        var items = jdbc.query("""
+            SELECT id, status, attempts, delivered_at_ms, provider_message_id, error_code
+            FROM alert_outbox WHERE id=?
+            """, (rs,n) -> new OutboxEventStatus(
+                rs.getString("id"), rs.getString("status"), rs.getInt("attempts"),
+                rs.getObject("delivered_at_ms", Long.class),
+                rs.getObject("provider_message_id", Long.class),
+                rs.getString("error_code")), id);
+        if (items.isEmpty()) throw new IllegalArgumentException("Unknown event identifier");
+        return items.getFirst();
+    }
+
     /** Recover a crashed sender after lease expiry; cap re-delivery attempts. */
     public void recoverExpired(long now, int maxAttempts) {
         jdbc.update("""

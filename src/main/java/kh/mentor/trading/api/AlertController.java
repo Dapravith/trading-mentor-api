@@ -26,6 +26,12 @@ public class AlertController {
             "message", "Events recorded for the delivery worker; none sent by this request");
     }
 
+    @GetMapping("/events/{eventId}")
+    public kh.mentor.trading.alerts.OutboxEventStatus eventStatus(
+        @org.springframework.web.bind.annotation.PathVariable String eventId) {
+        return repository.eventStatus(eventId);
+    }
+
     @GetMapping("/status")
     public Map<String, Integer> status() { return repository.statusCounts(); }
 }
