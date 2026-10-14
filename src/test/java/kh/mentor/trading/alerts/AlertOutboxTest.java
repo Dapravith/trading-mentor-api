@@ -36,6 +36,19 @@ class AlertOutboxTest {
             "fixture", "NO REAL ORDERS");
     }
 
+    @Test void testNotificationUsesRealOutboxAcknowledgementPath() {
+        String id=repository.enqueueConnectivityTest();
+        assertTrue(id.startsWith("connectivity-v1:"));
+        assertEquals(1,repository.statusCounts().get("PENDING"));
+        ClaimedAlert claim=repository.claim(System.currentTimeMillis()+1000,90_000,5);
+        assertNotNull(claim);
+        assertEquals(id,claim.id());
+        assertTrue(claim.payload().contains("CONNECTION TEST"));
+        assertTrue(claim.payload().contains("NOT a BUY/SELL signal"));
+        assertTrue(repository.markSent(claim,System.currentTimeMillis(),54321));
+        assertEquals(1,repository.statusCounts().get("SENT"));
+    }
+
     @Test void enqueuesOnceAndPersistsUntilAck() {
         assertTrue(repository.enqueue(signal));
         assertFalse(repository.enqueue(signal));
