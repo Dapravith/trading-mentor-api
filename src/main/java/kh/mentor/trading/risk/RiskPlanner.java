@@ -37,7 +37,7 @@ public class RiskPlanner {
         double downsidePerUnit = entry - stop + costRate * (entry + stop);
         double rewardPerUnit = target - entry - costRate * (entry + target);
         double quantity = Math.min(paperBalance * riskFraction / downsidePerUnit,
-            paperBalance * maxAllocation / entry);
+            paperBalance * maxAllocation / (entry * (1 + costRate)));
         double loss = quantity * downsidePerUnit;
         double reward = quantity * rewardPerUnit;
         double rr = loss > 0 ? reward / loss : 0;

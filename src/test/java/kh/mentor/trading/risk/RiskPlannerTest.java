@@ -23,6 +23,13 @@ class RiskPlannerTest {
         assertThrows(IllegalArgumentException.class, () -> planner.calculate(1000, 100, 105, 110));
     }
 
+    @Test void allocationIncludesEstimatedEntryCosts() {
+        RiskPlanner planner = new RiskPlanner(.005, .01, .01, .02);
+        RiskPlan plan = planner.calculate(1000, 100, 95, 140);
+        double cash = plan.quantity() * plan.entry() * (1 + .01 + .02);
+        assertTrue(cash <= 1000.000001);
+    }
+
     @Test void rejectsUnsafeRiskConfiguration() {
         assertThrows(IllegalArgumentException.class, () -> new RiskPlanner(.20, .20, .001, .001));
     }

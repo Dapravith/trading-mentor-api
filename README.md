@@ -1,7 +1,7 @@
 # AI Trading Mentor — Java Spring Boot / Gradle
 
 **Version:** Phase 1 (educational, read-only market analysis)  
-**Stack:** Java 21, Spring Boot 4.1.1, Gradle 9.3.1, Spring MVC, JDBC, embedded H2  
+**Stack:** Java 21, Spring Boot 4.1.1, Gradle 9.6.0, Spring MVC, JDBC, embedded H2  
 **Default:** loopback-only `127.0.0.1:8080`, Binance public Spot data, BTCUSDT and ETHUSDT.  
 **No user exchange credentials, order placement, Telegram token, leverage or live-trading functionality.**
 
@@ -31,12 +31,9 @@ gradle --version
 
 Java 21 is preferred to avoid unexpected toolchain differences. Java 25 may run Gradle, but the build requires an installed Java 21 toolchain; install it if necessary (for example `brew install --cask temurin@21`).
 
-> **Wrapper note:** The Gradle wrapper JAR was unavailable in the authoring environment (no external build downloads). The archive contains source and Gradle build files but **not a `gradlew` wrapper**. Generate it on your machine after installing Gradle:
-
-```bash
-gradle wrapper --gradle-version 9.3.1
-./gradlew --version
-```
+> **Gradle wrapper:** This GitHub repository includes `gradlew` and
+> `gradle/wrapper/gradle-wrapper.jar`. You do not need to install Gradle
+> globally. Use `./gradlew` directly. The wrapper currently targets Gradle 9.6.0.
 
 ## Step 2 — Test and start
 
@@ -154,6 +151,26 @@ scripts/           Hermes runner and installer
 - No exchange API keys are needed or should be added to this version.
 - Signals are hypotheses, not verified historical profitability.
 - For live operation, research the rules for exchange access applicable to your location.
+
+## Phase 2: Bounded educational backtest
+
+The new read-only endpoint simulates the current strategy on up to 500 recent
+completed Binance candles. It uses only completed signal bars, enters at the
+**next bar open**, sizes through RiskPlanner, assumes stop-first on intrabar
+ambiguity, models fees and slippage, and ends the replay by liquidating open
+positions for reporting. Results include net return, win rate, closed-trade
+drawdown and a fully invested buy-and-hold comparator.
+
+```bash
+curl -sS 'http://127.0.0.1:8080/api/v1/backtests/run?symbol=BTCUSDT&interval=4h&startingBalance=1000'
+```
+
+This is a **short, in-sample educational simulation**, not evidence that a
+strategy is profitable or a live buy/sell recommendation. The historical window
+is insufficient for market-cycle coverage or walk-forward validation. Review
+[Business Requirements and Limitations](docs/requirements.md).
+
+GitHub Actions now runs the Gradle test suite on pull requests.
 
 ## Next phases
 
