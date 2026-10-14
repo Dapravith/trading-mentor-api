@@ -16,7 +16,7 @@ This is the Java Spring Boot migration of the earlier Python proof of concept, n
 - H2 alert deduplication keyed by `(symbol, interval, candle close)`.
 - A no-LLM Hermes script that sends an alert only for a newly qualifying paper setup.
 
-The project intentionally does **not** have actual BUY/SELL endpoints, Binance account API integration, automated trading, backtesting, an LLM-dependent research agent, or a live price feed. These belong to later phases after rigorous testing.
+The project has no actual BUY/SELL endpoints, Binance account API integration, or live trading. Backtesting is educational. Optional Hermes news research submits structured AI-curated candidates, not independently fact-checked alerts or trade instructions.
 
 ## Step 1 — Prerequisites (macOS)
 
@@ -188,3 +188,17 @@ Official references:
 - Spring Boot: https://docs.spring.io/spring-boot/reference/
 - Gradle wrapper: https://docs.gradle.org/current/userguide/gradle_wrapper.html
 - Binance public endpoints: https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md
+
+## Automated market monitoring and Hermes global news (PR #8)
+
+Read [docs/automation-setup.md](docs/automation-setup.md) to complete local setup.
+Both automation features are off by default.
+
+- `MARKET_SCAN_ENABLED=true` schedules Java scans of completed BTC/ETH 4h candles every 15 minutes. The same outbox ensures one alert per setup. Disable any older Hermes market-scan job.
+- `GET /api/v1/alerts/events/{eventId}` exposes the actual Telegram provider acknowledgement and message ID, without exposing message contents.
+- `HERMES_NEWS_INTAKE_ENABLED=true` enables a loopback-only, independently secret-gated news intake. Hermes can research market-moving events and submit vetted metadata by calling `scripts/submit-hermes-news.sh`.
+- Hermes research jobs deliver **locally**, never directly to Telegram; Java is the single delivery owner for all alerts.
+- The research intake validates source domains, freshness, event identity, and mandatory risk/impact fields. **It does not verify page contents independently.** Messages are labeled AI-curated.
+
+This automation runs only while Spring Boot and the configured Hermes gateway are online.
+No live exchange API keys or trading endpoints are included.
