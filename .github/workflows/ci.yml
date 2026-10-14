@@ -19,5 +19,7 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/wrapper-validation@v4
       - uses: gradle/actions/setup-gradle@v4
+      - name: Verify safe local startup preflight
+        run: bash scripts/test-start-local.sh
       - name: Run tests
         run: ./gradlew --no-daemon clean test
