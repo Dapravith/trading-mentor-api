@@ -34,6 +34,7 @@ public class NewsIntakeService {
 
     private final AlertRepository outbox;
     private final Clock clock;
+    @org.springframework.beans.factory.annotation.Autowired
     public NewsIntakeService(AlertRepository outbox) {
         this(outbox, Clock.systemUTC());
     }
