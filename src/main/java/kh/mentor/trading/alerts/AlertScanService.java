@@ -1,12 +1,12 @@
 package kh.mentor.trading.alerts;
 
-import java.util.ArrayList;
 import java.util.List;
 import kh.mentor.trading.strategy.MarketAnalysis;
 import kh.mentor.trading.strategy.ScanService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+/** Produces durable events; sending Telegram is a separate operation. */
 @Service
 public class AlertScanService {
     private final ScanService scanService;
@@ -23,17 +23,15 @@ public class AlertScanService {
         this.paperBalance = paperBalance;
     }
 
-    public String scanForNewPaperAlerts() {
-        // No LLM, no exchange orders, no Telegram credentials in this service.
-        // If any upstream request fails, fail the whole scan (Hermes script returns nonzero).
+    public int scanAndQueue() {
+        // Fetch both before writing: an upstream failure must not publish a partial scan.
         List<MarketAnalysis> analyses = List.of(
             scanService.scan("BTCUSDT", interval, paperBalance),
-            scanService.scan("ETHUSDT", interval, paperBalance)
-        );
-        List<String> messages = new ArrayList<>();
-        for (MarketAnalysis result : analyses) {
-            if (alerts.recordNew(result)) messages.add(AlertFormatter.format(result));
+            scanService.scan("ETHUSDT", interval, paperBalance));
+        int queued = 0;
+        for (MarketAnalysis analysis : analyses) {
+            if (alerts.enqueue(analysis)) queued++;
         }
-        return String.join("\n\n", messages);
+        return queued;
     }
 }

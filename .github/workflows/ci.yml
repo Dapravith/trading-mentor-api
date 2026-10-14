@@ -19,5 +19,13 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/wrapper-validation@v4
       - uses: gradle/actions/setup-gradle@v4
+      - name: Verify safe local startup preflight
+        run: bash scripts/test-start-local.sh
+      - name: Verify Telegram and Hermes local operational scripts
+        run: |
+          bash -n scripts/verify-telegram-delivery.sh
+          bash -n scripts/install-hermes-news-local.sh
+          bash -n scripts/submit-hermes-news.sh
+          bash scripts/test-telegram-verify.sh
       - name: Run tests
         run: ./gradlew --no-daemon clean test
