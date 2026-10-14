@@ -71,6 +71,20 @@ public class AlertRepository {
         }
     }
 
+    /** Find the most recently recorded Telegram connectivity test without queuing another one. */
+    public OutboxEventStatus latestConnectivityTest() {
+        var rows = jdbc.query("""
+            SELECT id, status, attempts, delivered_at_ms, provider_message_id, error_code
+            FROM alert_outbox WHERE strategy_version='connectivity-v1'
+            ORDER BY created_at_ms DESC, id DESC LIMIT 1
+            """, (rs, i) -> new OutboxEventStatus(
+                rs.getString("id"), rs.getString("status"), rs.getInt("attempts"),
+                rs.getObject("delivered_at_ms", Long.class),
+                rs.getObject("provider_message_id", Long.class),
+                rs.getString("error_code")));
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
     public OutboxEventStatus eventStatus(String id) {
         if (id == null || id.isBlank() || id.length() > 160) {
             throw new IllegalArgumentException("Invalid event identifier");
