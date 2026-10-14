@@ -12,10 +12,34 @@ curl --fail --silent --show-error --max-time 10 "$BASE/api/v1/health" >/dev/null
   echo "Spring Boot is not responding on 127.0.0.1:8080" >&2
   exit 3
 }
-RESPONSE="$(curl --fail --silent --show-error --max-time 15 -X POST "$BASE/api/v1/alerts/test")" || {
-  echo "Could not queue: check TELEGRAM_DELIVERY_ENABLED and TELEGRAM_TEST_ALERT_ENABLED in .env, then restart." >&2
+# Capture status and body separately to distinguish missing endpoint, DB errors,
+# and network errors. Never display local secrets.
+RESPONSE_FILE="$(mktemp)"
+trap 'rm -f "$RESPONSE_FILE"' EXIT
+HTTP_CODE="$(curl --silent --show-error --max-time 15 -o "$RESPONSE_FILE" -w '%{http_code}' \
+    -X POST "$BASE/api/v1/alerts/test")" || {
+  echo "Could not reach Spring Boot's Telegram test endpoint." >&2
   exit 4
 }
+RESPONSE="$(cat "$RESPONSE_FILE")"
+case "$HTTP_CODE" in
+  200|201|202)
+    ;;
+  404)
+    echo "Telegram test endpoint is disabled. Set TELEGRAM_DELIVERY_ENABLED=true and TELEGRAM_TEST_ALERT_ENABLED=true and restart Java." >&2
+    exit 4
+    ;;
+  500|503)
+    echo "Backend failed to store the test event (HTTP $HTTP_CODE). This is a server/database error, NOT proof of wrong Telegram flags." >&2
+    echo "Check the Java console for telegram_test_outbox_enqueue_failed, SQLSTATE or the deepest 'Caused by:' error." >&2
+    echo "Try: curl -i http://127.0.0.1:8080/api/v1/alerts/status" >&2
+    exit 4
+    ;;
+  *)
+    echo "Telegram test endpoint returned HTTP $HTTP_CODE. Inspect the Java console and configured local flags." >&2
+    exit 4
+    ;;
+esac
 EVENT_ID="$(printf '%s' "$RESPONSE" | python3 -c '
 import json, re, sys
 try:
