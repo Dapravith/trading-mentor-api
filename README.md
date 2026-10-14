@@ -242,3 +242,22 @@ in this GitHub repository. To finish operator setup:
 See [Complete local activation runbook](docs/automation-setup.md).
 Neither CI success nor registration of a cron job proves that your local
 Hermes browser or Telegram destination has been exercised end-to-end.
+
+## Diagnose or manually recover FAILED Telegram notifications
+
+Terminal `FAILED` alerts are intentionally **not retried automatically**.
+Inspect the failure reason before deciding to replay a message. This patch
+adds local, authenticated, one-event-at-a-time recovery with durable audit.
+See [the failed-alert recovery runbook](docs/failed-telegram-recovery.md).
+
+Configure `ALERT_MANUAL_RETRY_ENABLED=true` and an independent
+`ALERT_OPERATOR_KEY` in your private `.env`, restart Java, then:
+
+```bash
+bash scripts/manage-failed-alerts.sh list
+bash scripts/manage-failed-alerts.sh retry 'EVENT_ID_FROM_LIST' \
+  'Channel posting permission fixed and verified'
+```
+
+This does **not** automatically fix a failed Hermes research cron; news must
+first be successfully researched and ingested into Java. No real trading.

@@ -59,3 +59,17 @@ CREATE TABLE IF NOT EXISTS paper_positions (
 );
 CREATE INDEX IF NOT EXISTS idx_paper_positions_status ON paper_positions(status);
 CREATE INDEX IF NOT EXISTS idx_paper_positions_closed ON paper_positions(closed_at_ms);
+
+
+-- Explicit manual replay history. Records why a FAILED event was requeued.
+-- Existing H2 databases retain all previous outbox records.
+CREATE TABLE IF NOT EXISTS alert_retry_audit (
+    id VARCHAR(36) PRIMARY KEY,
+    alert_id VARCHAR(160) NOT NULL,
+    prior_attempts INT NOT NULL,
+    prior_error_code VARCHAR(64),
+    operator_reason VARCHAR(200) NOT NULL,
+    requested_at_ms BIGINT NOT NULL,
+    CONSTRAINT fk_alert_retry_outbox FOREIGN KEY (alert_id) REFERENCES alert_outbox(id)
+);
+CREATE INDEX IF NOT EXISTS idx_retry_audit_event ON alert_retry_audit(alert_id, requested_at_ms);
