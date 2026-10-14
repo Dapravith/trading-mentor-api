@@ -256,3 +256,41 @@ To diagnose a failure, share the HTTP response and relevant Java log lines,
 but remove credentials. Existing file-backed H2 databases may retain schema
 from previous checkouts: `CREATE TABLE IF NOT EXISTS` does not migrate an
 already-existing table. Never drop tables merely to hide an incompatibility.
+
+## Diagnosing the generic `internal_error` from GET /alerts/test/latest
+
+The generic response `{"error":"internal_error","message":"Request failed; no trading action was taken"}`
+was emitted by an older catch-all exception handler. It could mean a **missing
+route** on an old JVM, not necessarily a broken H2 query. The fixed handler now
+returns:
+
+- **404 not_found**: that route is absent. Confirm the checked-out Git branch,
+  rebuild, and shut down the older Java process before starting the updated
+  version.
+- **200**: latest test was found. Inspect `SENT` and `telegramMessageId`.
+- **204**: no matching test recorded in the current H2 database.
+- **503 database_unavailable** with `sqlState`: the lookup encountered an H2
+  error. Check the Spring Boot console for the sanitized
+  `api_database_failed` record; if SQLSTATE starts with `42`, investigate
+  a legacy schema mismatch before applying a versioned migration.
+- **500 internal_error**: an unexpected server exception; inspect the server
+  console for `api_request_unexpected_failure` with its exception type.
+
+Use `curl -i` rather than `curl -sS | jq .` during diagnosis: the latter
+hides the HTTP status.
+
+```bash
+cd ~/Desktop/trading-mentor-api
+git fetch origin
+git switch feat/scheduled-market-and-hermes-news
+git pull --ff-only
+./gradlew clean test
+# Stop any previous Java/IntelliJ instance FIRST (Ctrl+C), then:
+bash scripts/start-local.sh
+# Separate terminal:
+curl -i http://127.0.0.1:8080/api/v1/alerts/status
+curl -i http://127.0.0.1:8080/api/v1/alerts/test/latest
+```
+
+**Do not reset the H2 file**; already-sent messages and their provider receipts
+are durable and may be needed to reconcile duplicates or failures.
