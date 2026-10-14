@@ -162,34 +162,34 @@ For the exact recovery commands, see
 ## One-command acceptance workflow (local operator)
 
 After starting your single Spring Boot instance with
-\`bash scripts/start-local.sh\`, run these in a **second terminal**.
+`bash scripts/start-local.sh`, run these in a **second terminal**.
 
 ### 1. Confirm the database acknowledgement
 
-\`\`\`bash
+```bash
 bash scripts/verify-telegram-delivery.sh
-\`\`\`
+```
 
 This submits exactly one clearly labeled, non-trading Telegram test alert.
 It polls the exact event record, requiring **SENT** and a positive Telegram
-\`message_id\`; also visually confirm the post is in the intended channel.
+`message_id`; also visually confirm the post is in the intended channel.
 There is no need to manually copy the UUID.
 
 ### 2. Activate Java automatic market scans
 
-Change these values in your existing, Git-ignored local \`.env\`:
+Change these values in your existing, Git-ignored local `.env`:
 
-\`\`\`dotenv
+```dotenv
 TELEGRAM_DELIVERY_ENABLED=true
 TELEGRAM_TEST_ALERT_ENABLED=false
 MARKET_SCAN_ENABLED=true
-\`\`\`
+```
 
 Stop your currently running Java instance with Ctrl+C; restart it with:
 
-\`\`\`bash
+```bash
 bash scripts/start-local.sh
-\`\`\`
+```
 
 The Java scheduler scans completed BTCUSDT/ETHUSDT candles about every
 15 minutes while the app is running. **No valid setup = no Telegram alert.**
@@ -197,15 +197,15 @@ Keep the previous Hermes market-scan cron job disabled to avoid duplicates.
 
 ### 3. Activate Hermes global market research (one guarded job)
 
-Make sure \`HERMES_NEWS_INTAKE_ENABLED=true\` and
-\`HERMES_NEWS_INGEST_KEY\` is a genuine independently generated strong
-secret in \`.env\`, then restart Java to load the settings.
+Make sure `HERMES_NEWS_INTAKE_ENABLED=true` and
+`HERMES_NEWS_INGEST_KEY` is a genuine independently generated strong
+secret in `.env`, then restart Java to load the settings.
 
-\`\`\`bash
+```bash
 hermes cron list
 bash scripts/install-hermes-news-local.sh
 hermes cron list
-\`\`\`
+```
 
 The script checks the configuration, backend health, Hermes CLI support,
 and whether a job with the expected name already exists. It refuses
@@ -213,13 +213,13 @@ to install a duplicate. It schedules research with **local** delivery only;
 Java subsequently delivers qualifying, validated candidates to Telegram.
 
 To trigger Hermes and inspect its actual agent output, find the new job ID
-in \`hermes cron list\` and run:
+in `hermes cron list` and run:
 
-\`\`\`bash
+```bash
 hermes cron run YOUR_JOB_ID
 hermes cron runs YOUR_JOB_ID --limit 5
 curl -fsS http://127.0.0.1:8080/api/v1/alerts/status
-\`\`\`
+```
 
 An empty news run may be correct when no new substantiated event exists.
 Cron creation alone is **not proof** that the Hermes model/browser tools
@@ -227,5 +227,5 @@ or local news submission are working. Check execution history.
 
 **This repo does not have access to your local Telegram credentials, H2
 database, Hermes CLI or gateway.** These acceptance commands must be run
-on your Mac; never upload the \`.env\` file or paste secrets into chat.
+on your Mac; never upload the `.env` file or paste secrets into chat.
 
