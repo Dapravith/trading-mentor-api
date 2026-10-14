@@ -54,7 +54,6 @@ class AlertManualRetryServiceTest {
         assertEquals("QUEUED",result.status());
         assertEquals("PENDING",repository.eventStatus(id).status());
         assertEquals(0,repository.eventStatus(id).attempts());
-        assertEquals(1,service.failed(20).size()-1+1==1?0:0); // no FAILED events remain
         assertTrue(service.failed(20).isEmpty());
         assertEquals(1,jdbc.queryForObject(
             "SELECT COUNT(*) FROM alert_retry_audit WHERE alert_id=?",Integer.class,id));
