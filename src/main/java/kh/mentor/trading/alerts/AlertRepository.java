@@ -15,6 +15,25 @@ public class AlertRepository {
 
     public AlertRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
+    /** Explicit connectivity test only. Never creates a market recommendation. */
+    public String enqueueConnectivityTest() {
+        long now = System.currentTimeMillis();
+        String id = "connectivity-v1:" + java.util.UUID.randomUUID();
+        String payload = "🧪 AI TRADING MENTOR — CONNECTION TEST\n"
+            + "Telegram channel transport is connected.\n"
+            + "This is a test message, NOT a BUY/SELL signal. No orders placed.\n"
+            + "Time (UTC): " + java.time.Instant.ofEpochMilli(now);
+        int inserted = jdbc.update("""
+            INSERT INTO alert_outbox
+              (id, symbol, candle_interval, candle_close_ms, strategy_version,
+               payload, status, attempts, next_attempt_ms, created_at_ms)
+            VALUES (?, 'SYSTEM', 'test', ?, 'connectivity-v1', ?,
+                    'PENDING', 0, ?, ?)
+            """, id, now, payload, now, now);
+        if (inserted != 1) throw new IllegalStateException("Connectivity test was not queued");
+        return id;
+    }
+
     public boolean enqueue(MarketAnalysis analysis) {
         if (!"PAPER_SETUP_WATCH".equals(analysis.status())) return false;
         long now = System.currentTimeMillis();
