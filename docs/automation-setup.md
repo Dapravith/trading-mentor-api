@@ -100,7 +100,7 @@ hermes cron list
 SCRIPT_PATH="$(pwd)/scripts/submit-hermes-news.sh"
 PROMPT="$(sed "s|__SUBMIT_SCRIPT__|${SCRIPT_PATH}|g" docs/hermes-news-agent.md)"
 hermes cron create 'every 1h' "$PROMPT" \
-  --deliver local --name 'Trading Mentor Global Crypto Research'
+  --workdir "$(pwd)" --deliver local --name 'Trading Mentor Global Crypto Research'
 ```
 
 Do **not** change `--deliver local` to `--deliver telegram` for this job.
@@ -131,3 +131,18 @@ The same `GET /api/v1/alerts/events/{eventId}` can confirm Telegram ACK.
   financial-performance or guaranteed-profit claims.
 - Scheduler stops when your Mac is off/asleep. 24/7 needs a separately
   secured always-on host; do not deploy to production government servers.
+
+
+## Verifying actual Telegram delivery
+
+After POST /api/v1/alerts/test returns an eventId, check the exact event:
+
+```bash
+curl -sS 'http://127.0.0.1:8080/api/v1/alerts/events/connectivity-v1:YOUR_UUID'
+```
+
+A delivered status is `SENT` with a non-null `telegramMessageId`.
+The recipient must also visually confirm the test post is in the **intended**
+channel. API/CI success alone cannot prove your private channel received it.
+Hermes browser/terminal capability and the gateway running locally are
+additional requirements for an active news-research schedule.
