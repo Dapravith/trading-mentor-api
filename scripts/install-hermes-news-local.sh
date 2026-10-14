@@ -15,13 +15,26 @@ grep -Eq '^HERMES_NEWS_INGEST_KEY=' .env || {
 command -v hermes >/dev/null 2>&1 || {
   echo "Hermes CLI is not installed" >&2; exit 4;
 }
-hermes cron create --help 2>&1 | grep -Fq -- '--workdir' || {
-  echo "Your Hermes CLI needs cron --workdir support" >&2; exit 5;
+CRON_HELP="$(hermes cron create --help 2>&1)" || {
+  echo "Cannot inspect Hermes cron create help" >&2; exit 5;
 }
+if ! grep -Fq -- '--workdir' <<< "$CRON_HELP"; then
+  echo "Your Hermes CLI needs cron --workdir support" >&2; exit 5;
+fi
 curl --fail --silent --show-error --max-time 8 \
   http://127.0.0.1:8080/api/v1/health >/dev/null || {
   echo "Start Spring Boot first" >&2; exit 6;
 }
+# An anonymous POST must be rejected by the ENABLED news endpoint (401).
+# A 404 indicates the operator did not restart Java with intake enabled.
+NEWS_HTTP_CODE="$(curl --silent --show-error --max-time 8 \
+  --output /dev/null --write-out '%{http_code}' \
+  --request POST --header 'Content-Type: application/json' \
+  --data '{}' http://127.0.0.1:8080/api/v1/news/candidates)" || exit 6
+if [[ "$NEWS_HTTP_CODE" != "401" ]]; then
+  echo "News intake not ready (expected HTTP 401 without key, received $NEWS_HTTP_CODE). Restart Java with HERMES_NEWS_INTAKE_ENABLED=true and a valid strong key." >&2
+  exit 6
+fi
 JOBS="$(hermes cron list)" || { echo "Hermes cron is unavailable" >&2; exit 7; }
 if printf '%s\n' "$JOBS" | grep -Fq "$NAME"; then
   echo "Job already exists. Review 'hermes cron list'; refusing duplicate."
