@@ -6,10 +6,10 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import kh.mentor.trading.alerts.AlertFormatter;
 import kh.mentor.trading.alerts.AlertRepository;
 import org.springframework.stereotype.Service;
 
@@ -29,8 +29,8 @@ public class NewsIntakeService {
     private static final Set<String> PRIMARY_DOMAINS = Set.of(
         "imf.org","federalreserve.gov","bls.gov","sec.gov","cftc.gov",
         "ecb.europa.eu","esma.europa.eu","binance.com","bis.org");
-    private static final ZoneId CAMBODIA = ZoneId.of("Asia/Phnom_Penh");
-    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm O");
+    private static final Map<String,String> IMPACT_LABELS = Map.of(
+        "BULLISH","🟢 Bullish","BEARISH","🔴 Bearish","UNCERTAIN","⚪ Uncertain");
 
     private final AlertRepository outbox;
     private final Clock clock;
@@ -84,26 +84,20 @@ public class NewsIntakeService {
         }
         String eventId="hermes-news-v1:"+candidate.eventKey();
         String message="""
-            📰 AI TRADING MENTOR — AI-CURATED MARKET NEWS
-            This report is a research candidate, not independently fact-checked by Java.
-
-            %s
-            Event (Cambodia): %s
-            Published (Cambodia): %s
-            Impact hypothesis: %s
-            Affected assets: %s
+            📰 %s
 
             %s
 
+            %s · %s
             Risk: %s
-            Primary: %s
-            %s
-            No guaranteed outcome, live price claim or buy/sell instruction.
-            """.formatted(candidate.headline(),TIME.format(event.atZone(CAMBODIA)),
-                TIME.format(published.atZone(CAMBODIA)),candidate.impact(),
-                String.join(", ",candidate.assets()),candidate.summary(),candidate.risk(),
-                candidate.primarySourceUrl(), second==null ? "Second source: original issuer" :
-                    "Corroboration: "+candidate.corroboratingSourceUrl());
+            🕒 %s (published %s)
+            🔗 %s%s
+            ⚠️ AI-curated, not fact-checked — not trading advice."""
+            .formatted(candidate.headline(),candidate.summary(),
+                IMPACT_LABELS.get(candidate.impact()),String.join(", ",candidate.assets()),
+                candidate.risk(),AlertFormatter.time(event.toEpochMilli()),
+                AlertFormatter.time(published.toEpochMilli()),candidate.primarySourceUrl(),
+                second==null ? "" : "\n🔗 "+candidate.corroboratingSourceUrl());
         boolean created=outbox.enqueueNews(eventId,event.toEpochMilli(),message);
         return new Result(eventId,created?"QUEUED":"DUPLICATE",created);
     }

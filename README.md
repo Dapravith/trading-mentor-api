@@ -101,7 +101,7 @@ curl -sS http://127.0.0.1:8080/api/v1/alerts/status
 
 With both `TELEGRAM_DELIVERY_ENABLED=true` and
 `TELEGRAM_TEST_ALERT_ENABLED=true`, the test queues a visible Telegram
-**CONNECTION TEST**, not a trading recommendation. The Java worker retries
+**connection test** message, not a trading recommendation. The Java worker retries
 transient failures and marks `SENT` only after Telegram API acknowledgement.
 After confirming your private test channel receives it, disable the test
 endpoint by setting `TELEGRAM_TEST_ALERT_ENABLED=false` and restarting.
@@ -111,6 +111,14 @@ qualifying **paper research** setups. No market setup means no signal message.
 Hermes can trigger the scan, but must not deliver a second copy of the alert.
 No Binance account credentials, trade execution, or automatic news-feed
 Telegram posting exist in this version.
+
+### Telegram bot commands (opt-in)
+
+With `TELEGRAM_COMMANDS_ENABLED=true` and your numeric user ID in
+`TELEGRAM_ALLOWED_USER_IDS`, a private chat with the bot accepts `/help`,
+`/status`, `/scan`, `/backtest`, `/research`, `/alerts`, `/paper`, `/open`,
+`/close`, `/confirm` and more. Paper ledger changes always need `/confirm`.
+See [Telegram Bot Commands](docs/telegram-commands.md).
 
 ## Architecture
 

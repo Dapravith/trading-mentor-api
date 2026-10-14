@@ -44,9 +44,11 @@ class NewsIntakeServiceTest {
         assertEquals(first.eventId(),second.eventId());
         assertEquals("hermes-news-v1:2026-10-14-global-macro-risk-announcement",first.eventId());
         verify(outbox,times(2)).enqueueNews(eq(first.eventId()),anyLong(),
-            argThat(message->message.contains("AI-CURATED")
-                && message.contains("Cambodia")
-                && message.contains("No guaranteed outcome")));
+            argThat(message->message.startsWith("📰 ")
+                && message.contains("⚪ Uncertain · BTC, ETH")
+                && message.contains(" ICT (published ")
+                && message.contains("🔗 https://www.reuters.com/world/test-report\n🔗 https://www.imf.org/")
+                && message.endsWith("AI-curated, not fact-checked — not trading advice.")));
     }
 
     @Test void authoritativePrimaryPublicationNeedsNoSecondLink() {

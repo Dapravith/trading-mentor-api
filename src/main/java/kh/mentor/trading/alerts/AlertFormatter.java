@@ -7,9 +7,11 @@ import java.util.Locale;
 import kh.mentor.trading.risk.RiskPlan;
 import kh.mentor.trading.strategy.MarketAnalysis;
 
+/** Short, plain-text Telegram notifications. Every message keeps a one-line paper-only notice. */
 public final class AlertFormatter {
     private static final ZoneId CAMBODIA = ZoneId.of("Asia/Phnom_Penh");
-    private static final DateTimeFormatter FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm z", Locale.ROOT);
+    private static final DateTimeFormatter FORMAT =
+        DateTimeFormatter.ofPattern("d MMM HH:mm z", Locale.ENGLISH);
     private AlertFormatter() {}
 
     public static String format(MarketAnalysis a) {
@@ -17,20 +19,27 @@ public final class AlertFormatter {
         if (!"PAPER_SETUP_WATCH".equals(a.status()) || risk == null || !risk.valid()) {
             throw new IllegalArgumentException("No qualifying paper setup to announce");
         }
-        String time = Instant.ofEpochMilli(a.candleCloseMs()).atZone(CAMBODIA).format(FORMAT);
         return """
-            📊 AI TRADING MENTOR — PAPER SETUP ONLY
-            Pair: %s | Interval: %s
-            Last COMPLETED candle (Cambodia): %s
-            Historical candle close: %,.4f USDT (NOT live quote)
-            RSI14: %.2f | EMA20: %,.2f | EMA50: %,.2f
-            Volume / previous 20 average: %.2fx
-            Hypothetical stop: %,.4f | target: %,.4f
-            Paper position value: %,.2f USDT
-            Estimated downside with modeled costs: %,.2f USDT
-            NOT a verified BUY signal. No real orders. Check current market conditions.
-            """.formatted(a.symbol(), a.interval(), time, a.lastCompletedClose(),
-                a.rsi14(), a.ema20(), a.ema50(), a.volumeRatio(),
-                risk.stop(), risk.target(), risk.positionUsdt(), risk.estimatedLossUsdt());
+            📊 %s %s · Paper setup
+            Close %s · RSI %.1f · Vol %.1fx · Trend %s
+            Stop %s → Target %s · R:R %.1f
+            Size %s USDT · Risk ≈%s USDT
+            🕒 Candle closed %s
+            ⚠️ Paper only — not a buy signal, no orders placed."""
+            .formatted(a.symbol(), a.interval(),
+                price(a.lastCompletedClose()), a.rsi14(), a.volumeRatio(),
+                a.ema20() > a.ema50() ? "↑" : "↓",
+                price(risk.stop()), price(risk.target()), risk.netRewardRisk(),
+                price(risk.positionUsdt()), price(risk.estimatedLossUsdt()),
+                time(a.candleCloseMs()));
+    }
+
+    /** Cambodia time, e.g. "14 Oct 15:00 ICT"; shared by all notifications. */
+    public static String time(long epochMs) {
+        return Instant.ofEpochMilli(epochMs).atZone(CAMBODIA).format(FORMAT);
+    }
+
+    private static String price(double value) {
+        return String.format(Locale.ROOT, "%,.2f", value);
     }
 }
