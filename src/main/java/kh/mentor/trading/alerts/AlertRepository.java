@@ -19,10 +19,9 @@ public class AlertRepository {
     public String enqueueConnectivityTest() {
         long now = System.currentTimeMillis();
         String id = "connectivity-v1:" + java.util.UUID.randomUUID();
-        String payload = "🧪 AI TRADING MENTOR — CONNECTION TEST\n"
-            + "Telegram channel transport is connected.\n"
-            + "This is a test message, NOT a BUY/SELL signal. No orders placed.\n"
-            + "Time (UTC): " + java.time.Instant.ofEpochMilli(now);
+        String payload = "🧪 Connection test — Telegram is connected.\n"
+            + "🕒 " + AlertFormatter.time(now) + "\n"
+            + "⚠️ Test only — not a trading signal.";
         int inserted = jdbc.update("""
             INSERT INTO alert_outbox
               (id, symbol, candle_interval, candle_close_ms, strategy_version,

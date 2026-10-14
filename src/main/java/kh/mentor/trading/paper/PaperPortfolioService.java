@@ -23,9 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PaperPortfolioService {
     private static final Set<String> SYMBOLS = Set.of("BTCUSDT", "ETHUSDT");
-    private static final Set<String> EMOTIONS =
+    public static final Set<String> EMOTIONS =
         Set.of("CALM", "FOMO", "FEAR", "IMPULSIVE", "UNCERTAIN");
-    private static final Set<String> EXIT_REASONS = Set.of("MANUAL", "STOP", "TARGET");
+    public static final Set<String> EXIT_REASONS = Set.of("MANUAL", "STOP", "TARGET");
     private final JdbcTemplate jdbc;
     private final RiskPlanner risk;
     private final double sideCost;

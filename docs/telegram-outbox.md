@@ -77,7 +77,7 @@ A successful `POST /test` returns `QUEUED` immediately. The Java scheduler
 (60-second fixed delay by default) picks it up; the status eventually becomes
 `SENT` **only after** Telegram's successful Bot API acknowledgement.
 The Telegram channel should display a message explicitly saying
-`CONNECTION TEST` and `NOT a BUY/SELL signal`.
+`🧪 Connection test — Telegram is connected.` and `Test only — not a trading signal.`
 If a transient error occurs, the event stays queued with bounded retries.
 If it goes `FAILED`, check channel permissions, chat ID and bot token.
 

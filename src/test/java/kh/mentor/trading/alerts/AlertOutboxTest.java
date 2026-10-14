@@ -56,8 +56,8 @@ class AlertOutboxTest {
         ClaimedAlert claim=repository.claim(System.currentTimeMillis()+1000,90_000,5);
         assertNotNull(claim);
         assertEquals(id,claim.id());
-        assertTrue(claim.payload().contains("CONNECTION TEST"));
-        assertTrue(claim.payload().contains("NOT a BUY/SELL signal"));
+        assertTrue(claim.payload().startsWith("🧪 Connection test"));
+        assertTrue(claim.payload().contains("not a trading signal"));
         assertTrue(repository.markSent(claim,System.currentTimeMillis(),54321));
         assertEquals(1,repository.statusCounts().get("SENT"));
     }
