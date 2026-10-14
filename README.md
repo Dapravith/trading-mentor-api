@@ -66,41 +66,34 @@ Sample status keys:
 
 The sample above is schematic: the real response includes timestamp and indicators, with actual statuses based on fetched market data.
 
-## Step 3 — Test deduplicated alerts locally
+## Step 3 — Durable Telegram outbox
+
+The `POST /api/v1/alerts/scan` endpoint now **queues** new educational
+setups instead of reporting a message as delivered before confirmation.
+Delivery is off by default. `GET /api/v1/alerts/status` shows the outbox
+state counts. Details: [Telegram Outbox Operations](docs/telegram-outbox.md).
+
+To enable direct, acknowledged Telegram transport on your local machine:
 
 ```bash
-curl -i -X POST http://127.0.0.1:8080/api/v1/alerts/scan
+export TELEGRAM_BOT_TOKEN='replace-with-secret'
+export TELEGRAM_CHAT_ID='replace-with-destination'
+export TELEGRAM_DELIVERY_ENABLED=true
+./gradlew bootRun
 ```
 
-- When both pairs have no qualifying setup (or all setups were previously recorded), the response is HTTP **204** without a body.
-- With a new paper setup, the response is HTTP **200**, text-only, including Cambodia-local candle time.
-- If a market data fetch fails, it returns an error; no actionable signal is issued.
-
-*Limitation:* The dedupe record is persisted **before Hermes/Telegram acknowledges delivery**, so a failed send may lose an alert. Treat it as an educational at-most-once publisher; later harden with an outbox + delivery acknowledgements before calling it production-ready.
-
-## Step 4 — Hermes integration
-
-First keep the backend running. Validate your Hermes Telegram gateway and destination.
+After setting up the bot in your private Telegram group/channel, run:
 
 ```bash
-hermes gateway status
-hermes cron list
-bash scripts/install-hermes-scan.sh
+curl -X POST http://127.0.0.1:8080/api/v1/alerts/scan
+curl http://127.0.0.1:8080/api/v1/alerts/status
 ```
 
-**Important:** If the earlier Python trading mentor is already scheduled, disable/delete that cron job first to avoid two separate bots sending duplicate alerts. Inspect the list and follow Hermes CLI commands for your installed version.
-
-Then register only one job (after confirming Hermes CLI supports the shown cron flags):
-
-```bash
-hermes cron create 'every 15m' \
-  --no-agent \
-  --script ai-trading-mentor-java-scan.sh \
-  --deliver telegram \
-  --name 'AI Trading Mentor Java Paper Watch'
-```
-
-The Hermes script `scripts/hermes-scan.sh` uses `curl` against the local Spring Boot endpoint and prints output only for fresh educational setup alerts. Telegram delivery is handled by Hermes. This script is not an autonomous LLM trading system.
+Hermes remains a read-only research assistant and may trigger scans through
+the provided script. **Do not** configure Hermes to send these same messages:
+only the Java worker sends Telegram messages and records verified
+provider acknowledgements. Review existing Hermes cron jobs to disable old
+direct-delivery duplicates.
 
 ## Architecture
 
