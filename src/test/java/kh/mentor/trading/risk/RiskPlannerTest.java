@@ -24,7 +24,7 @@ class RiskPlannerTest {
     }
 
     @Test void allocationIncludesEstimatedEntryCosts() {
-        RiskPlanner planner = new RiskPlanner(.005, 1.0, .01, .02);
+        RiskPlanner planner = new RiskPlanner(.005, .01, .01, .02);
         RiskPlan plan = planner.calculate(1000, 100, 95, 140);
         double cash = plan.quantity() * plan.entry() * (1 + .01 + .02);
         assertTrue(cash <= 1000.000001);
