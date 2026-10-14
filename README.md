@@ -209,3 +209,26 @@ Both automation features are off by default.
 
 This automation runs only while Spring Boot and the configured Hermes gateway are online.
 No live exchange API keys or trading endpoints are included.
+
+## Three remaining local acceptance checks
+
+The BotFather token and chat ID are stored only in your local `.env`, not
+in this GitHub repository. To finish operator setup:
+
+1. With `TELEGRAM_DELIVERY_ENABLED=true` and
+   `TELEGRAM_TEST_ALERT_ENABLED=true`, start one backend via
+   `bash scripts/start-local.sh`, then in another terminal run
+   `bash scripts/verify-telegram-delivery.sh`. This creates a test message,
+   polls its persisted event and verifies `SENT` and Telegram `message_id`.
+   Also visually check the intended channel.
+2. Change `.env` to `MARKET_SCAN_ENABLED=true` and
+   `TELEGRAM_TEST_ALERT_ENABLED=false`, restart the backend. Java owns
+   the 15-minute completed-candle scan; disable older Hermes market crons.
+3. Configure a strong `HERMES_NEWS_INGEST_KEY`, set
+   `HERMES_NEWS_INTAKE_ENABLED=true`, restart the backend and run
+   `bash scripts/install-hermes-news-local.sh` in a second terminal.
+   The installer checks the endpoint and refuses an existing job.
+
+See [Complete local activation runbook](docs/automation-setup.md).
+Neither CI success nor registration of a cron job proves that your local
+Hermes browser or Telegram destination has been exercised end-to-end.
