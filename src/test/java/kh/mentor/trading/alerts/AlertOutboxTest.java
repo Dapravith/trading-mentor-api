@@ -36,6 +36,19 @@ class AlertOutboxTest {
             "fixture", "NO REAL ORDERS");
     }
 
+    @Test void latestTestCanConfirmPriorDeliveryWithoutEnqueueing() {
+        assertNull(repository.latestConnectivityTest());
+        String id = repository.enqueueConnectivityTest();
+        ClaimedAlert claim = repository.claim(System.currentTimeMillis() + 1000, 90_000, 5);
+        assertNotNull(claim);
+        assertTrue(repository.markSent(claim, System.currentTimeMillis(), 54321));
+        var latest = repository.latestConnectivityTest();
+        assertEquals(id, latest.eventId());
+        assertEquals("SENT", latest.status());
+        assertEquals(54321L, latest.telegramMessageId());
+        assertEquals(1, repository.statusCounts().get("SENT"));
+    }
+
     @Test void testNotificationUsesRealOutboxAcknowledgementPath() {
         String id=repository.enqueueConnectivityTest();
         assertTrue(id.startsWith("connectivity-v1:"));
@@ -47,6 +60,22 @@ class AlertOutboxTest {
         assertTrue(claim.payload().contains("NOT a BUY/SELL signal"));
         assertTrue(repository.markSent(claim,System.currentTimeMillis(),54321));
         assertEquals(1,repository.statusCounts().get("SENT"));
+    }
+
+    @Test void newsEventUsesSameDurableDeliveryOutbox() {
+        String id="hermes-news-v1:2026-10-14-global-macro-update";
+        assertTrue(repository.enqueueNews(id,System.currentTimeMillis(),
+            "AI curated research message (not a trading signal)"));
+        assertFalse(repository.enqueueNews(id,System.currentTimeMillis(),
+            "AI curated research message (not a trading signal)"));
+        var pending=repository.eventStatus(id);
+        assertEquals("PENDING",pending.status());
+        assertEquals(0,pending.attempts());
+        ClaimedAlert claim=repository.claim(System.currentTimeMillis()+1000,90_000,5);
+        assertTrue(repository.markSent(claim,System.currentTimeMillis(),789L));
+        var sent=repository.eventStatus(id);
+        assertEquals("SENT",sent.status());
+        assertEquals(789L,sent.telegramMessageId());
     }
 
     @Test void enqueuesOnceAndPersistsUntilAck() {

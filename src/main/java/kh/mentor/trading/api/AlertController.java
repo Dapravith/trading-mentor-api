@@ -26,6 +26,22 @@ public class AlertController {
             "message", "Events recorded for the delivery worker; none sent by this request");
     }
 
+    @GetMapping("/events/{eventId}")
+    public kh.mentor.trading.alerts.OutboxEventStatus eventStatus(
+        @org.springframework.web.bind.annotation.PathVariable String eventId) {
+        return repository.eventStatus(eventId);
+    }
+
+    /** Inspect earlier bot connectivity success without enqueuing another test. */
+    @GetMapping("/test/latest")
+    public org.springframework.http.ResponseEntity<kh.mentor.trading.alerts.OutboxEventStatus>
+        latestTest() {
+        var result = repository.latestConnectivityTest();
+        return result == null
+            ? org.springframework.http.ResponseEntity.noContent().build()
+            : org.springframework.http.ResponseEntity.ok(result);
+    }
+
     @GetMapping("/status")
     public Map<String, Integer> status() { return repository.statusCounts(); }
 }

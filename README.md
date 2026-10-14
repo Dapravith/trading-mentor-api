@@ -16,7 +16,7 @@ This is the Java Spring Boot migration of the earlier Python proof of concept, n
 - H2 alert deduplication keyed by `(symbol, interval, candle close)`.
 - A no-LLM Hermes script that sends an alert only for a newly qualifying paper setup.
 
-The project intentionally does **not** have actual BUY/SELL endpoints, Binance account API integration, automated trading, backtesting, an LLM-dependent research agent, or a live price feed. These belong to later phases after rigorous testing.
+The project has no actual BUY/SELL endpoints, Binance account API integration, or live trading. Backtesting is educational. Optional Hermes news research submits structured AI-curated candidates, not independently fact-checked alerts or trade instructions.
 
 ## Step 1 — Prerequisites (macOS)
 
@@ -37,9 +37,16 @@ Java 21 is preferred to avoid unexpected toolchain differences. Java 25 may run 
 
 ## Step 2 — Test and start
 
+**macOS startup fix:** A single embedded H2 file may be opened by only one
+process. If `Database may be already in use [90020]` appears, see the
+[non-destructive H2 lock troubleshooting guide](docs/troubleshooting-h2-lock.md).
+**Do not delete the database file or force-kill unrelated Java processes.**
+
+
 ```bash
 ./gradlew clean test
-./gradlew bootRun
+# Preflight detects a running instance/locked H2 database (non-destructive).
+bash scripts/start-local.sh
 ```
 
 Open a separate terminal:
@@ -188,3 +195,40 @@ Official references:
 - Spring Boot: https://docs.spring.io/spring-boot/reference/
 - Gradle wrapper: https://docs.gradle.org/current/userguide/gradle_wrapper.html
 - Binance public endpoints: https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md
+
+## Automated market monitoring and Hermes global news (PR #8)
+
+Read [docs/automation-setup.md](docs/automation-setup.md) to complete local setup.
+Both automation features are off by default.
+
+- `MARKET_SCAN_ENABLED=true` schedules Java scans of completed BTC/ETH 4h candles every 15 minutes. The same outbox ensures one alert per setup. Disable any older Hermes market-scan job.
+- `GET /api/v1/alerts/events/{eventId}` exposes the actual Telegram provider acknowledgement and message ID, without exposing message contents.
+- `HERMES_NEWS_INTAKE_ENABLED=true` enables a loopback-only, independently secret-gated news intake. Hermes can research market-moving events and submit vetted metadata by calling `scripts/submit-hermes-news.sh`.
+- Hermes research jobs deliver **locally**, never directly to Telegram; Java is the single delivery owner for all alerts.
+- The research intake validates source domains, freshness, event identity, and mandatory risk/impact fields. **It does not verify page contents independently.** Messages are labeled AI-curated.
+
+This automation runs only while Spring Boot and the configured Hermes gateway are online.
+No live exchange API keys or trading endpoints are included.
+
+## Three remaining local acceptance checks
+
+The BotFather token and chat ID are stored only in your local `.env`, not
+in this GitHub repository. To finish operator setup:
+
+1. With `TELEGRAM_DELIVERY_ENABLED=true` and
+   `TELEGRAM_TEST_ALERT_ENABLED=true`, start one backend via
+   `bash scripts/start-local.sh`, then in another terminal run
+   `bash scripts/verify-telegram-delivery.sh`. This creates a test message,
+   polls its persisted event and verifies `SENT` and Telegram `message_id`.
+   Also visually check the intended channel.
+2. Change `.env` to `MARKET_SCAN_ENABLED=true` and
+   `TELEGRAM_TEST_ALERT_ENABLED=false`, restart the backend. Java owns
+   the 15-minute completed-candle scan; disable older Hermes market crons.
+3. Configure a strong `HERMES_NEWS_INGEST_KEY`, set
+   `HERMES_NEWS_INTAKE_ENABLED=true`, restart the backend and run
+   `bash scripts/install-hermes-news-local.sh` in a second terminal.
+   The installer checks the endpoint and refuses an existing job.
+
+See [Complete local activation runbook](docs/automation-setup.md).
+Neither CI success nor registration of a cron job proves that your local
+Hermes browser or Telegram destination has been exercised end-to-end.
