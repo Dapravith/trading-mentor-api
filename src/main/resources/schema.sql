@@ -8,6 +8,26 @@ CREATE TABLE IF NOT EXISTS signal_alerts (
     PRIMARY KEY (symbol, candle_interval, candle_close_ms)
 );
 
+CREATE TABLE IF NOT EXISTS alert_outbox (
+    id VARCHAR(160) PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL,
+    candle_interval VARCHAR(10) NOT NULL,
+    candle_close_ms BIGINT NOT NULL,
+    strategy_version VARCHAR(32) NOT NULL,
+    payload CLOB NOT NULL,
+    status VARCHAR(12) NOT NULL,
+    attempts INT DEFAULT 0 NOT NULL,
+    next_attempt_ms BIGINT NOT NULL,
+    lease_until_ms BIGINT,
+    delivered_at_ms BIGINT,
+    provider_message_id BIGINT,
+    error_code VARCHAR(64),
+    created_at_ms BIGINT NOT NULL,
+    CONSTRAINT chk_attempts CHECK (attempts >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_alert_ready ON alert_outbox(status, next_attempt_ms);
+
 -- Paper money only. Double is acceptable for educational simulation, NOT live settlement.
 CREATE TABLE IF NOT EXISTS paper_account (
     id INT PRIMARY KEY,
