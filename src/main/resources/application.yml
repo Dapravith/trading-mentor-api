@@ -28,6 +28,7 @@ trading:
   alert:
     enabled: true
     delivery-enabled: ${TELEGRAM_DELIVERY_ENABLED:false}
+    test-endpoint-enabled: ${TELEGRAM_TEST_ALERT_ENABLED:false}
     telegram-token: ${TELEGRAM_BOT_TOKEN:}
     telegram-chat-id: ${TELEGRAM_CHAT_ID:}
     max-attempts: 5
