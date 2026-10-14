@@ -15,7 +15,7 @@ set -a
 # shellcheck disable=SC1091
 source "$ROOT/.env"
 set +a
-if [[ "${HERMES_NEWS_INTAKE_ENABLED:-false}" != "true" || ${#HERMES_NEWS_INGEST_KEY} -lt 32 ]]; then
+if [[ "${HERMES_NEWS_INTAKE_ENABLED:-false}" != "true" || -z "${HERMES_NEWS_INGEST_KEY:-}" || ${#HERMES_NEWS_INGEST_KEY} -lt 32 || "${HERMES_NEWS_INGEST_KEY}" == REPLACE* ]]; then
   echo "News intake disabled or missing key" >&2
   exit 4
 fi
