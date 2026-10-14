@@ -1,7 +1,7 @@
 # AI Trading Mentor — Java Spring Boot / Gradle
 
 **Version:** Phase 1 (educational, read-only market analysis)  
-**Stack:** Java 21, Spring Boot 4.1.1, Gradle 9.3.1, Spring MVC, JDBC, embedded H2  
+**Stack:** Java 21, Spring Boot 4.1.1, Gradle 9.6.0, Spring MVC, JDBC, embedded H2  
 **Default:** loopback-only `127.0.0.1:8080`, Binance public Spot data, BTCUSDT and ETHUSDT.  
 **No user exchange credentials, order placement, Telegram token, leverage or live-trading functionality.**
 

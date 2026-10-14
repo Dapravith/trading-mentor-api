@@ -79,6 +79,25 @@ class BacktestEngineTest {
         assertEquals(0,result.winRatePct());
     }
 
+    @Test void strategyCannotSeeTheEntryCandle() {
+        List<Candle> sample = bars(100,110,97);
+        java.util.concurrent.atomic.AtomicInteger inspected = new java.util.concurrent.atomic.AtomicInteger();
+        StrategyEngine inspector = new StrategyEngine(risk) {
+            @Override public MarketAnalysis analyze(String symbol, String interval,
+                List<Candle> history, double balance) {
+                // The current entry candle must not be included in the signal history.
+                assertFalse(history.contains(sample.get(history.size())));
+                inspected.incrementAndGet();
+                return new MarketAnalysis(symbol, interval, history.getLast().closeTimeMs(),
+                    "",100,100,100,50,1,1,"NO_TRADE",
+                    List.of("No signal"),null,"test","test");
+            }
+        };
+        new BacktestEngine(inspector,risk,.001,.001)
+            .run("BTCUSDT","4h",sample,1000);
+        assertEquals(sample.size() - BacktestEngine.WARMUP, inspected.get());
+    }
+
     @Test void insufficientWarmupIsRejected() {
         assertThrows(IllegalArgumentException.class,() ->
             new BacktestEngine(singleSignal(),risk,.001,.001)
