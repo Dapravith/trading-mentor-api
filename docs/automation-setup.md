@@ -30,7 +30,7 @@ Start Spring Boot:
 ```bash
 set -a; source .env; set +a
 ./gradlew clean test
-./gradlew bootRun
+bash scripts/start-local.sh
 ```
 
 In a second terminal:
@@ -146,3 +146,15 @@ The recipient must also visually confirm the test post is in the **intended**
 channel. API/CI success alone cannot prove your private channel received it.
 Hermes browser/terminal capability and the gateway running locally are
 additional requirements for an active news-research schedule.
+
+## Startup safety on macOS (embedded H2)
+
+The file-backed H2 database must be opened by only one Java application
+process. Use `bash scripts/start-local.sh` rather than launching a second
+`./gradlew bootRun` or IntelliJ instance against the same DB. The preflight
+inspects `lsof` for `data/trading-mentor.mv.db` and port 8080, refuses a
+conflicting start, and loads `.env` without printing credentials. It never
+kills a process or deletes any data.
+
+For the exact recovery commands, see
+[H2 file lock troubleshooting](troubleshooting-h2-lock.md).

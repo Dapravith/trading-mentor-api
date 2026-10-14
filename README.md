@@ -37,9 +37,16 @@ Java 21 is preferred to avoid unexpected toolchain differences. Java 25 may run 
 
 ## Step 2 — Test and start
 
+**macOS startup fix:** A single embedded H2 file may be opened by only one
+process. If `Database may be already in use [90020]` appears, see the
+[non-destructive H2 lock troubleshooting guide](docs/troubleshooting-h2-lock.md).
+**Do not delete the database file or force-kill unrelated Java processes.**
+
+
 ```bash
 ./gradlew clean test
-./gradlew bootRun
+# Preflight detects a running instance/locked H2 database (non-destructive).
+bash scripts/start-local.sh
 ```
 
 Open a separate terminal:
