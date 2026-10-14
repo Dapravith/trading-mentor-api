@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 
 /** Read-only public market data; intentionally contains no order or account APIs. */
 @Component
-public class BinancePublicClient implements MarketDataProvider {
+public class BinancePublicClient implements MarketDataProvider, HistoricalMarketDataProvider {
     private static final Set<String> ALLOWED_SYMBOLS = Set.of("BTCUSDT", "ETHUSDT");
     private static final Set<String> ALLOWED_INTERVALS = Set.of("4h", "1d");
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(12);
@@ -78,6 +78,60 @@ public class BinancePublicClient implements MarketDataProvider {
         long age = exchangeNow - closed.getLast().closeTimeMs();
         if (age < 0 || age > 2 * durationMs) throw new MarketDataException("Stale candle data");
         return List.copyOf(closed);
+    }
+
+    /**
+     * Paginated, completed UTC DAILY candles for bounded multi-year research.
+     * Unlike live scans, an intentionally old history window is not "stale".
+     */
+    @Override
+    public List<Candle> fetchHistoricalDaily(String symbol, long startMs, long endExclusiveMs) {
+        long day = 86_400_000L;
+        long span = endExclusiveMs - startMs;
+        if (!ALLOWED_SYMBOLS.contains(symbol) || startMs <= 0 || endExclusiveMs <= startMs
+            || startMs % day != 0 || endExclusiveMs % day != 0
+            || span < 180L * day || span > 2_000L * day) {
+            throw new IllegalArgumentException("Use supported pair and 180-2000 UTC calendar days");
+        }
+        long now = fetchJson("/api/v3/time").path("serverTime").asLong(-1);
+        if (now <= 0 || Math.abs(now - Instant.now().toEpochMilli()) > maxClockSkewMs
+            || endExclusiveMs > now) {
+            throw new MarketDataException("Historical window incomplete or Binance clock invalid");
+        }
+        List<Candle> history = new ArrayList<>();
+        long cursor = startMs;
+        while (cursor < endExclusiveMs) {
+            long batchSize = Math.min(1000L, (endExclusiveMs - cursor) / day);
+            String path = "/api/v3/klines?symbol=" + symbol
+                + "&interval=1d&startTime=" + cursor
+                + "&endTime=" + (endExclusiveMs - 1) + "&limit=" + batchSize;
+            JsonNode rows = fetchJson(path);
+            if (!rows.isArray() || rows.isEmpty()) {
+                throw new MarketDataException("Missing historical Binance candles");
+            }
+            for (JsonNode row : rows) {
+                if (!row.isArray() || row.size() < 7) {
+                    throw new MarketDataException("Malformed history candle");
+                }
+                Candle candle;
+                try {
+                    candle = new Candle(row.get(0).asLong(-1), row.get(6).asLong(-1),
+                        parseNumber(row.get(1)), parseNumber(row.get(2)),
+                        parseNumber(row.get(3)), parseNumber(row.get(4)), parseNumber(row.get(5)));
+                } catch (IllegalArgumentException e) {
+                    throw new MarketDataException("Invalid historical candle", e);
+                }
+                if (candle.openTimeMs() != cursor || candle.closeTimeMs() != cursor + day - 1
+                    || candle.closeTimeMs() >= now) {
+                    throw new MarketDataException("Incomplete, missing or out-of-order historical candles");
+                }
+                history.add(candle);
+                cursor += day;
+                if (cursor >= endExclusiveMs) break;
+            }
+            if (history.size() > 2_000) throw new MarketDataException("Historical window too large");
+        }
+        return List.copyOf(history);
     }
 
     private static double parseNumber(JsonNode node) {
