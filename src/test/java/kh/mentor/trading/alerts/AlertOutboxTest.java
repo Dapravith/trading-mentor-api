@@ -36,6 +36,19 @@ class AlertOutboxTest {
             "fixture", "NO REAL ORDERS");
     }
 
+    @Test void latestTestCanConfirmPriorDeliveryWithoutEnqueueing() {
+        assertNull(repository.latestConnectivityTest());
+        String id = repository.enqueueConnectivityTest();
+        ClaimedAlert claim = repository.claim(System.currentTimeMillis() + 1000, 90_000, 5);
+        assertNotNull(claim);
+        assertTrue(repository.markSent(claim, System.currentTimeMillis(), 54321));
+        var latest = repository.latestConnectivityTest();
+        assertEquals(id, latest.eventId());
+        assertEquals("SENT", latest.status());
+        assertEquals(54321L, latest.telegramMessageId());
+        assertEquals(1, repository.statusCounts().get("SENT"));
+    }
+
     @Test void testNotificationUsesRealOutboxAcknowledgementPath() {
         String id=repository.enqueueConnectivityTest();
         assertTrue(id.startsWith("connectivity-v1:"));
