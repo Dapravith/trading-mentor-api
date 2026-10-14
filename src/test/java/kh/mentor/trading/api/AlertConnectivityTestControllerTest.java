@@ -7,7 +7,7 @@ import java.sql.SQLException;
 import kh.mentor.trading.alerts.AlertRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.dao.BadSqlGrammarException;
+import org.springframework.jdbc.BadSqlGrammarException;
 
 class AlertConnectivityTestControllerTest {
     private final AlertRepository repository = mock(AlertRepository.class);
