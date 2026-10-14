@@ -66,34 +66,44 @@ Sample status keys:
 
 The sample above is schematic: the real response includes timestamp and indicators, with actual statuses based on fetched market data.
 
-## Step 3 — Durable Telegram outbox
+## Step 3 — Connect a Telegram channel (manual account setup)
 
-The `POST /api/v1/alerts/scan` endpoint now **queues** new educational
-setups instead of reporting a message as delivered before confirmation.
-Delivery is off by default. `GET /api/v1/alerts/status` shows the outbox
-state counts. Details: [Telegram Outbox Operations](docs/telegram-outbox.md).
+The Java service now uses a durable Telegram outbox, and includes an
+**opt-in, non-trading connection test**.
 
-To enable direct, acknowledged Telegram transport on your local machine:
+**Follow the complete [BotFather → Channel → Test guide](docs/telegram-outbox.md).**
 
 ```bash
-export TELEGRAM_BOT_TOKEN='replace-with-secret'
-export TELEGRAM_CHAT_ID='replace-with-destination'
-export TELEGRAM_DELIVERY_ENABLED=true
+cp .env.example .env
+chmod 600 .env
+# Fill in the token and channel destination on your computer.
+${EDITOR:-nano} .env
+
+set -a
+source .env
+set +a
 ./gradlew bootRun
 ```
 
-After setting up the bot in your private Telegram group/channel, run:
+Then run this in another terminal:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/api/v1/alerts/scan
-curl http://127.0.0.1:8080/api/v1/alerts/status
+curl -sS -X POST http://127.0.0.1:8080/api/v1/alerts/test
+curl -sS http://127.0.0.1:8080/api/v1/alerts/status
 ```
 
-Hermes remains a read-only research assistant and may trigger scans through
-the provided script. **Do not** configure Hermes to send these same messages:
-only the Java worker sends Telegram messages and records verified
-provider acknowledgements. Review existing Hermes cron jobs to disable old
-direct-delivery duplicates.
+With both `TELEGRAM_DELIVERY_ENABLED=true` and
+`TELEGRAM_TEST_ALERT_ENABLED=true`, the test queues a visible Telegram
+**CONNECTION TEST**, not a trading recommendation. The Java worker retries
+transient failures and marks `SENT` only after Telegram API acknowledgement.
+After confirming your private test channel receives it, disable the test
+endpoint by setting `TELEGRAM_TEST_ALERT_ENABLED=false` and restarting.
+
+The scan endpoint remains `POST /api/v1/alerts/scan`, which only queues
+qualifying **paper research** setups. No market setup means no signal message.
+Hermes can trigger the scan, but must not deliver a second copy of the alert.
+No Binance account credentials, trade execution, or automatic news-feed
+Telegram posting exist in this version.
 
 ## Architecture
 
