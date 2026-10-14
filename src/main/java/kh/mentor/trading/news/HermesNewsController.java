@@ -20,7 +20,7 @@ public class HermesNewsController {
     private final byte[] key;
     public HermesNewsController(NewsIntakeService service,
         @Value("${trading.news.ingest-key:}") String configuredKey) {
-        if(configuredKey.length()<32) throw new IllegalStateException(
+        if(configuredKey.length()<32 || configuredKey.startsWith("REPLACE") || configuredKey.startsWith("your-") || configuredKey.isBlank()) throw new IllegalStateException(
             "HERMES_NEWS_INGEST_KEY must contain at least 32 characters when intake is enabled");
         this.service=service;
         this.key=configuredKey.getBytes(StandardCharsets.UTF_8);
