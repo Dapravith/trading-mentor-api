@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS alert_outbox (
     provider_message_id BIGINT,
     error_code VARCHAR(64),
     created_at_ms BIGINT NOT NULL,
-    CONSTRAINT chk_alert_status CHECK (status='PENDING' OR status='SENDING' OR status='SENT' OR status='FAILED'),
     CONSTRAINT chk_attempts CHECK (attempts >= 0)
 );
 
