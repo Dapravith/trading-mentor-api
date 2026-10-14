@@ -229,3 +229,30 @@ or local news submission are working. Check execution history.
 database, Hermes CLI or gateway.** These acceptance commands must be run
 on your Mac; never upload the `.env` file or paste secrets into chat.
 
+
+## HTTP 500 / 503 from the Telegram test endpoint
+
+If `bash scripts/verify-telegram-delivery.sh` fails to queue with HTTP 500,
+**do not reset or delete the H2 database**. Check the previously received
+Telegram test *without sending another message*:
+
+```bash
+curl -i http://127.0.0.1:8080/api/v1/alerts/status
+curl -i http://127.0.0.1:8080/api/v1/alerts/test/latest
+```
+
+The second request returns HTTP 200 with an event ID, status, and message
+ID if a previous connection test exists, or 204 if none exists in the current
+database. `status=SENT` with a positive `telegramMessageId` confirms the
+database persisted a successful Telegram acknowledgement.
+
+The new backend distinguishes a database write failure (HTTP 503 with
+`OUTBOX_DATABASE_UNAVAILABLE`) from a disabled endpoint (HTTP 404). The
+Spring Boot console emits a sanitized
+`telegram_test_outbox_enqueue_failed sqlState=... vendorCode=...` message,
+without including bot tokens or SQL parameter values.
+
+To diagnose a failure, share the HTTP response and relevant Java log lines,
+but remove credentials. Existing file-backed H2 databases may retain schema
+from previous checkouts: `CREATE TABLE IF NOT EXISTS` does not migrate an
+already-existing table. Never drop tables merely to hide an incompatibility.
