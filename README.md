@@ -172,6 +172,16 @@ is insufficient for market-cycle coverage or walk-forward validation. Review
 
 GitHub Actions now runs the Gradle test suite on pull requests.
 
+## Manual Paper Portfolio & Journal (development branch)
+
+`POST /api/v1/paper/positions` records a manually approved, hypothetical
+spot position with its risk plan, entry thesis and emotional state.
+`POST /api/v1/paper/positions/{id}/close` records a manual close and reflection.
+`GET /api/v1/paper/summary` exposes cash, reserved principal, realized P&L
+and position counts. No Binance account or order API is used.
+
+See [Paper Portfolio Manual and Constraints](docs/paper-portfolio.md).
+
 ## Next phases
 
 1. Add integration tests against stubbed Binance HTTP responses, as well as a full CI build.
