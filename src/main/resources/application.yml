@@ -35,6 +35,8 @@ trading:
   alert:
     enabled: true
     delivery-enabled: ${TELEGRAM_DELIVERY_ENABLED:false}
+    manual-retry-enabled: ${ALERT_MANUAL_RETRY_ENABLED:false}
+    operator-key: ${ALERT_OPERATOR_KEY:}
     test-endpoint-enabled: ${TELEGRAM_TEST_ALERT_ENABLED:false}
     telegram-token: ${TELEGRAM_BOT_TOKEN:}
     telegram-chat-id: ${TELEGRAM_CHAT_ID:}
