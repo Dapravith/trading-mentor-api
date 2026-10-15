@@ -294,3 +294,20 @@ to a user's personal portfolio.
 See [Cloud Monitoring Setup](docs/cloud-monitoring.md) for the exact GitHub
 Secrets, Variables, manual dry-run and validation checklist.
 
+
+## Connect your real Binance account — read-only only
+
+The optional Spot account connector now supports two **signed GET-only**
+Binance API endpoints with a system-generated HMAC key and verifies that the
+key **cannot trade, transfer or withdraw**. It returns a privacy-limited
+account presence summary, not exact balances, UID or credentials.
+
+`BINANCE_ACCOUNT_MONITOR_ENABLED=false` by default; set true only in a
+local/private host `.env`. Daily checks at **09:00 Asia/Phnom_Penh** are
+separately gated behind `BINANCE_ACCOUNT_DAILY_ENABLED=true` and deliver
+a limited status message to a numeric private Telegram chat, not the public
+alerts channel. There is **no autonomous live trading**.
+
+See [Binance Read-only Account & Daily Cron Runbook](docs/binance-account-read-only.md).
+Do not upload exchange API credentials to GitHub or enable withdrawal access.
+
