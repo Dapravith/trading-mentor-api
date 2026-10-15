@@ -25,7 +25,7 @@ are **not integrated**, despite the broader roadmap name.
   (configured defaults 0.5% account risk and 20% allocation). The cloud
   publisher independently checks hard limits before notifying.
 - This is a rule-based **hypothesis**, **not a price forecast or verified edge**.
-  Research remains incomplete (see [Issue #3](../..//issues/3)).
+  Research remains incomplete (see [Issue #3](https://github.com/Dapravith/trading-mentor-api/issues/3)).
 
 ### Mode A — GitHub Actions cloud monitoring (no VPS)
 
@@ -129,6 +129,5 @@ server database with backups, add proper auth and distributed job leases.
 - [ ] Formal external uptime monitoring and market-provider redundancy planned
 
 Follow [Issue #12](https://github.com/Dapravith/trading-mentor-api/issues/12)
-for the overall implementation tracker. Continue backtest quality at [Issue #3]
-(https://github.com/Dapravith/trading-mentor-api/issues/3), portfolio rules
+for the overall implementation tracker. Continue backtest quality at [Issue #3](https://github.com/Dapravith/trading-mentor-api/issues/3), portfolio rules
 and exit-monitoring at [Issue #4](https://github.com/Dapravith/trading-mentor-api/issues/4).
