@@ -53,7 +53,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Validate cloud state machine (offline)
-        run: python3 -m unittest discover -s app/scripts -p 'test-cloud-market-monitor.py' -v
+        run: python3 app/scripts/test-cloud-market-monitor.py -v
 
       - name: Build existing Java scanner
         working-directory: app
