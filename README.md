@@ -269,3 +269,28 @@ bash scripts/manage-failed-alerts.sh retry 'EVENT_ID_FROM_LIST' \
 
 This does **not** automatically fix a failed Hermes research cron; news must
 first be successfully researched and ingested into Java. No real trading.
+
+## Cloud Monitoring (new, optional — PR #13)
+
+For **best-effort** monitoring while your Mac is off, the repository now
+includes a manually gated GitHub Actions schedule (approximately every
+15 minutes) which uses the **existing Java strategy and risk engine**,
+sends only new `PAPER_SETUP_WATCH` alerts and one daily market status to
+Telegram, and persists provider ACK metadata to the `monitor-state` branch.
+It can be tested with **dry_run=true** without sending messages.
+
+**This is NOT a guaranteed continuously running 24/7 server.** GitHub
+scheduled events can be delayed or dropped. A Docker Compose deployment is
+also provided for a user-supplied always-on host with a persistent H2
+volume. Do not run both modes or duplicate messages may occur.
+
+**Coverage today is ONLY BTCUSDT / ETHUSDT spot, completed 4h candles.**
+Alerts provide educational *entry-watch*, stop/invalidation and take-profit
+levels. They are not real buy/sell orders, trading signals validated for
+profitability, or instructions to transact. There is no position-specific
+sell detector in the stateless cloud workflow, which does not have access
+to a user's personal portfolio.
+
+See [Cloud Monitoring Setup](docs/cloud-monitoring.md) for the exact GitHub
+Secrets, Variables, manual dry-run and validation checklist.
+

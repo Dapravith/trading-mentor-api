@@ -1,0 +1,93 @@
+name: Cloud Market Monitor (paper only)
+
+on:
+  # Best effort: GitHub may delay/drop scheduled runs. UTC times avoid :00 load.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only scan/preview, never send Telegram or persist receipts'
+        type: boolean
+        default: true
+        required: true
+
+permissions:
+  contents: write  # Push only receipt metadata to monitor-state branch.
+
+concurrency:
+  group: trading-mentor-cloud-market
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    # Scheduled delivery is OFF until the repository owner sets this variable.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.CLOUD_MARKET_MONITOR_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      CLOUD_MONITOR_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+    steps:
+      - name: Checkout application
+        uses: actions/checkout@v4
+        with:
+          path: app
+          persist-credentials: false
+
+      - name: Checkout isolated durable receipt state
+        uses: actions/checkout@v4
+        with:
+          ref: monitor-state
+          path: state
+          persist-credentials: true
+
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate cloud state machine (offline)
+        run: python3 app/scripts/test-cloud-market-monitor.py -v
+
+      - name: Build existing Java scanner
+        working-directory: app
+        run: ./gradlew --no-daemon bootJar
+
+      - name: Run read-only market scan using existing Java strategy
+        env:
+          SPRING_DATASOURCE_URL: 'jdbc:h2:mem:cloudscan;DB_CLOSE_DELAY=-1'
+        run: |
+          set -euo pipefail
+          JAR="$(find app/build/libs -maxdepth 1 -name '*.jar' -type f | head -1)"
+          test -n "$JAR"
+          java -jar "$JAR" \
+            --spring.main.web-application-type=none \
+            --trading.cloud-monitor.enabled=true \
+            --trading.cloud-monitor.output=build/cloud-monitor/snapshot.json \
+            --trading.alert.delivery-enabled=false \
+            --trading.scan.scheduling-enabled=false \
+            --trading.telegram.commands-enabled=false
+          test -s build/cloud-monitor/snapshot.json
+
+      - name: Deliver only new paper signals, persist Telegram ACK
+        run: |
+          set -euo pipefail
+          git -C state config user.name "github-actions[bot]"
+          git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [[ "$CLOUD_MONITOR_DRY_RUN" == "true" ]]; then
+            python3 app/scripts/cloud-market-monitor.py \
+              --snapshot build/cloud-monitor/snapshot.json \
+              --state state/monitor-state.json --dry-run
+          else
+            test -n "$TELEGRAM_BOT_TOKEN"
+            test -n "$TELEGRAM_CHAT_ID"
+            python3 app/scripts/cloud-market-monitor.py \
+              --snapshot build/cloud-monitor/snapshot.json \
+              --state state/monitor-state.json
+          fi

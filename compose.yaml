@@ -1,0 +1,38 @@
+# Alternative TRUE continuous operation on a user-provided always-on host.
+# Never run this AND the GitHub Actions cloud monitor for the same Telegram channel.
+# Both may deliver a qualifying candle otherwise.
+services:
+  trading-mentor:
+    build: .
+    image: trading-mentor:local
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      SERVER_ADDRESS: "0.0.0.0" # Container-internal binding only
+      SERVER_PORT: "8080"
+      MARKET_SCAN_ENABLED: "true"
+      TELEGRAM_DELIVERY_ENABLED: "true"
+      TELEGRAM_TEST_ALERT_ENABLED: "false"
+    ports:
+      - "127.0.0.1:8080:8080" # Never expose H2/ops APIs publicly
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - trading_data:/opt/mentor/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+volumes:
+  trading_data:
