@@ -33,6 +33,8 @@ public class BinanceDailyAccountMonitor {
     private final String botToken;
     private final String privateChatId;
     private final JsonMapper mapper;
+    @FunctionalInterface interface PrivateSender { long send(String message); }
+    private final PrivateSender sender;
     private final HttpClient http=HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5)).build();
 
@@ -48,6 +50,17 @@ public class BinanceDailyAccountMonitor {
         this.mapper=mapper;
         this.botToken=token;
         this.privateChatId=chat;
+        this.sender=this::sendToPrivateChat;
+    }
+
+    /** Package-private offline-test seam: never calls real Telegram. */
+    BinanceDailyAccountMonitor(BinanceSpotAccountReader reader,JdbcTemplate jdbc,PrivateSender sender) {
+        this.reader=reader;
+        this.jdbc=jdbc;
+        this.sender=sender;
+        this.botToken="";
+        this.privateChatId="";
+        this.mapper=new JsonMapper();
     }
 
     @Scheduled(cron="${trading.account.daily-cron:0 0 9 * * *}",zone="Asia/Phnom_Penh")
@@ -67,7 +80,7 @@ public class BinanceDailyAccountMonitor {
                 +"BTC held: "+yesNo(result.holdsBtc())+" | ETH held: "+yesNo(result.holdsEth())+"\n"
                 +"⚠️ This is a private balance-presence check, not a buy/sell signal. "
                 +"No real order, transfer, or withdrawal is enabled.";
-            long id=sendToPrivateChat(msg);
+            long id=sender.send(msg);
             jdbc.update("""
                 MERGE INTO binance_account_digest
                   (report_date,status,provider_message_id,sent_at_ms)
