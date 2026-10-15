@@ -29,7 +29,7 @@ jobs:
           bash scripts/test-telegram-verify.sh
       - name: Test cloud market monitor without network or secrets
         run: |
-          python3 -m unittest discover -s scripts -p 'test-cloud-market-monitor.py' -v
+          python3 scripts/test-cloud-market-monitor.py -v
           python3 -m py_compile scripts/cloud-market-monitor.py
       - name: Run tests
         run: ./gradlew --no-daemon clean test
