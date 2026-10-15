@@ -20,7 +20,8 @@ from urllib import request, error
 UTC = dt.timezone.utc
 ALLOWED_SYMBOLS = ("BTCUSDT", "ETHUSDT")
 STRATEGY = "breakout-v1"
-CANDLE_MAX_AGE_SECONDS = 10 * 60 * 60
+# Never announce a completed-candle entry more than one 4h bar + delay later.
+CANDLE_MAX_AGE_SECONDS = 5 * 60 * 60
 STATE_SCHEMA = 1
 
 
