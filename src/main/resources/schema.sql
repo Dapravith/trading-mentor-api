@@ -73,3 +73,11 @@ CREATE TABLE IF NOT EXISTS alert_retry_audit (
     CONSTRAINT fk_alert_retry_outbox FOREIGN KEY (alert_id) REFERENCES alert_outbox(id)
 );
 CREATE INDEX IF NOT EXISTS idx_retry_audit_event ON alert_retry_audit(alert_id, requested_at_ms);
+
+-- Daily read-only account connectivity receipts. Never stores balances, API keys or UID.
+CREATE TABLE IF NOT EXISTS binance_account_digest (
+    report_date VARCHAR(10) PRIMARY KEY,
+    status VARCHAR(12) NOT NULL,
+    provider_message_id BIGINT,
+    sent_at_ms BIGINT
+);
