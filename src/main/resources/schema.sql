@@ -81,3 +81,11 @@ CREATE TABLE IF NOT EXISTS binance_account_digest (
     provider_message_id BIGINT,
     sent_at_ms BIGINT
 );
+
+-- Non-destructive additive migration for existing persistent H2 installations.
+-- The date row is leased before sending, and history is never reset.
+ALTER TABLE binance_account_digest ADD COLUMN IF NOT EXISTS attempts INT DEFAULT 0 NOT NULL;
+ALTER TABLE binance_account_digest ADD COLUMN IF NOT EXISTS next_attempt_ms BIGINT DEFAULT 0 NOT NULL;
+ALTER TABLE binance_account_digest ADD COLUMN IF NOT EXISTS lease_until_ms BIGINT;
+ALTER TABLE binance_account_digest ADD COLUMN IF NOT EXISTS error_code VARCHAR(64);
+ALTER TABLE binance_account_digest ADD COLUMN IF NOT EXISTS created_at_ms BIGINT DEFAULT 0 NOT NULL;
