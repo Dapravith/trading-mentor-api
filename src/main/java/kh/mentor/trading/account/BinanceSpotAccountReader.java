@@ -55,16 +55,17 @@ public final class BinanceSpotAccountReader {
         if(!permissions.path("enableReading").asBoolean(false)) {
             throw new IllegalStateException("API key does not permit read-only access");
         }
-        if(permissions.path("enableWithdrawals").asBoolean(true)
-            || permissions.path("enableSpotAndMarginTrading").asBoolean(true)
-            || permissions.path("enableFutures").asBoolean(false)
-            || permissions.path("enableMargin").asBoolean(false)
-            || permissions.path("enableFixApiTrade").asBoolean(false)
-            || permissions.path("enableInternalTransfer").asBoolean(false)
-            || permissions.path("permitsUniversalTransfer").asBoolean(false)
-            || permissions.path("enablePortfolioMarginTrading").asBoolean(false)
-            || permissions.path("enableVanillaOptions").asBoolean(false)) {
-            throw new IllegalStateException("Rejecting Binance API key with elevated permissions");
+        // Incomplete API-permission JSON must fail closed. Previously missing
+        // trade/transfer flags defaulted to false, which was unsafe.
+        for (String flag : new String[] {
+                "enableWithdrawals", "enableSpotAndMarginTrading", "enableFutures",
+                "enableMargin", "enableFixApiTrade", "enableInternalTransfer",
+                "permitsUniversalTransfer", "enablePortfolioMarginTrading",
+                "enableVanillaOptions" }) {
+            JsonNode value=permissions.get(flag);
+            if(value==null || !value.isBoolean() || value.asBoolean()) {
+                throw new IllegalStateException("Unverified or elevated Binance API key scope");
+            }
         }
         JsonNode account=reader.get("/api/v3/account","omitZeroBalances=true");
         if(!account.path("balances").isArray()) {

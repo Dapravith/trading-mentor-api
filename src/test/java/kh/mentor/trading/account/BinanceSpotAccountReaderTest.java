@@ -21,7 +21,9 @@ class BinanceSpotAccountReaderTest {
               "enableMargin":false,
               "enableInternalTransfer":false,
               "permitsUniversalTransfer":false,
-              "enableFixApiTrade":false
+              "enableFixApiTrade":false,
+              "enablePortfolioMarginTrading":false,
+              "enableVanillaOptions":false
             }
             """);
     }
@@ -69,7 +71,8 @@ class BinanceSpotAccountReaderTest {
         for(String flag:new String[]{
             "enableWithdrawals","enableSpotAndMarginTrading",
             "enableInternalTransfer","permitsUniversalTransfer","enableFutures",
-            "enableMargin","enableFixApiTrade"
+            "enableMargin","enableFixApiTrade",
+            "enablePortfolioMarginTrading","enableVanillaOptions"
         }) {
             String original=allowedPermissions().toString();
             // Replace each explicit false with true once; simulate an over-privileged key.
@@ -97,6 +100,24 @@ class BinanceSpotAccountReaderTest {
             catch(Exception e){throw new AssertionError(e);}
         });
         assertThrows(IllegalStateException.class,reader2::check);
+    }
+
+    @Test void missingOrNonBooleanTradingPermissionMustFailClosed() throws Exception {
+        var good=allowedPermissions();
+        for (String flag:new String[] {
+            "enableWithdrawals","enableSpotAndMarginTrading","enableInternalTransfer",
+            "enableFixApiTrade","enableVanillaOptions","enablePortfolioMarginTrading"
+        }) {
+            String json=good.toString().replace("\""+flag+"\":false", "\""+flag+"\":null");
+            var response=parse(json);
+            var reader=new BinanceSpotAccountReader((path,args)->response);
+            assertThrows(IllegalStateException.class,reader::check,flag);
+        }
+        var reader=new BinanceSpotAccountReader((path,args)->{
+            try {return parse("{\"enableReading\":true}");}
+            catch(Exception e) {throw new AssertionError(e);}
+        });
+        assertThrows(IllegalStateException.class,reader::check);
     }
 
     @Test void rejectsBadBalancesFailClosed() throws Exception {
