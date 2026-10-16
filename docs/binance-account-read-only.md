@@ -86,29 +86,61 @@ Example **redacted** response (example only):
 The actual API remains private/loopback-only; never route it through a
 public reverse proxy without authentication and TLS.
 
-## 3. Daily autonomous repeat — Java Spring Scheduler
+## 3. Daily account-check recovery and bounded retry
 
-```java
-@Scheduled(cron = "0 0 9 * * *", zone = "Asia/Phnom_Penh")
+The scheduled job uses a **15-minute fixed-delay poll** and runs only
+at/after **09:00 Asia/Phnom_Penh** each day. A service restarted at 10:00
+or 18:00 Cambodia time will still deliver today's report if it is missing.
+It never backfills an earlier day or invents a previous account snapshot.
+
+**Default schedule configuration:**
+
+```dotenv
+BINANCE_ACCOUNT_MONITOR_ENABLED=true
+BINANCE_ACCOUNT_DAILY_ENABLED=true
+BINANCE_ACCOUNT_POLL_MS=900000
+BINANCE_ACCOUNT_INITIAL_DELAY_MS=30000
+BINANCE_PRIVATE_CHAT_ID='YOUR_PRIVATE_NUMERIC_USER_ID'
 ```
 
-This performs one daily check at **09:00 Cambodia time**, but only if:
+The H2 row for each Cambodia calendar date is an **atomic lease**:
 
-- `BINANCE_ACCOUNT_MONITOR_ENABLED=true`
-- `BINANCE_ACCOUNT_DAILY_ENABLED=true`
-- `BINANCE_READ_API_KEY`, `BINANCE_READ_API_SECRET`, Telegram bot token
-  and a **private numeric** DM user ID are configured
-- Spring Boot is running on a single always-on machine
+- `PENDING` — prepared for the next attempt
+- `SENDING` — one worker has a two-minute lease
+- `SENT` — provider returned a positive Telegram `message_id`
+- `FAILED` — three attempts exhausted; requires operator review
 
-The H2 table `binance_account_digest` records a Telegram message ID and
-the local report date. This avoids repeat posts on ordinary application
-restarts that same day. If Telegram accepts the report but Java crashes
-before committing the receipt, a duplicate is still possible; this is
-**at-least-once** delivery.
+The service retries after a failure, but no more than three attempts on
+that day's report. Duplicate scheduler invocations do not send while a
+valid lease exists. A process crash between Telegram success and database
+acknowledgement remains an **at-least-once** duplicate risk; inspect the
+private chat before manually intervening.
 
-If the API/key is invalid, key scopes are overprivileged, network is down,
-or the report cannot be sent, the job **fails closed**. It logs only a broad
-exception category and never an API secret, balance or provider URL.
+**Operator acceptance — check without sending a new message:**
+
+```bash
+curl -i http://127.0.0.1:8080/api/v1/binance/account/status
+curl -i http://127.0.0.1:8080/api/v1/binance/account/daily-status
+```
+
+`daily-status` returns `204 No Content` before a report for that date
+exists. Otherwise it returns only `reportDate`, `status`, `attempts`,
+`telegramMessageId`, `sentAtMs` and `errorCode`; no balances or API
+keys. `SENT` plus a positive provider message ID **and visual confirmation
+in your private chat** establishes a successful daily receipt.
+
+The schema uses only additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+migrations for previous H2 files. Do not delete or replace the database
+when upgrading. Exactly one JVM/Compose container must own the H2 file.
+
+If credentials or the private Telegram destination are invalid, the job
+fails closed, logs only category metadata and stops retrying after the cap.
+The account connection should use a dedicated read-only HMAC key with
+trading and transfer permissions disabled.
+
+**Running it truly 24/7 still requires a host that stays online**. A
+GitHub Actions runner with a public repository is not an appropriate
+execution environment for your private Binance account keys.
 
 ## 4. What the system can and cannot do
 
