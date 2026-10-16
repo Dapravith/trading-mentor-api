@@ -1,3 +1,4 @@
+
 package kh.mentor.trading.paper;
 
 import java.time.DayOfWeek;
@@ -8,6 +9,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import kh.mentor.trading.market.CurrentPriceProvider;
 import kh.mentor.trading.risk.RiskPlan;
 import kh.mentor.trading.risk.RiskPlanner;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,176 +24,353 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PaperPortfolioService {
-    private static final Set<String> SYMBOLS = Set.of("BTCUSDT", "ETHUSDT");
+    private static final Set<String> SYMBOLS =
+        Set.of("BTCUSDT", "ETHUSDT");
+
     public static final Set<String> EMOTIONS =
         Set.of("CALM", "FOMO", "FEAR", "IMPULSIVE", "UNCERTAIN");
-    public static final Set<String> EXIT_REASONS = Set.of("MANUAL", "STOP", "TARGET");
+
+    public static final Set<String> EXIT_REASONS =
+        Set.of("MANUAL", "STOP", "TARGET");
+
     private final JdbcTemplate jdbc;
     private final RiskPlanner risk;
+    private final CurrentPriceProvider currentPriceProvider;
     private final double sideCost;
 
-    public PaperPortfolioService(JdbcTemplate jdbc, RiskPlanner risk,
+    public PaperPortfolioService(
+        JdbcTemplate jdbc,
+        RiskPlanner risk,
+        CurrentPriceProvider currentPriceProvider,
         @Value("${trading.fee-per-side:0.001}") double fee,
         @Value("${trading.slippage-per-side:0.001}") double slippage) {
+
         if (!Double.isFinite(fee) || !Double.isFinite(slippage)
             || fee < 0 || slippage < 0 || fee > .01 || slippage > .02) {
             throw new IllegalArgumentException("Invalid paper costs");
         }
-        this.jdbc=jdbc;
-        this.risk=risk;
-        this.sideCost=fee+slippage;
+
+        this.jdbc = jdbc;
+        this.risk = risk;
+        this.currentPriceProvider = currentPriceProvider;
+        this.sideCost = fee + slippage;
     }
 
     @Transactional
     public PaperPosition open(OpenPaperRequest input) {
-        if (input == null || !input.confirmPaperOnly() ||
-            !SYMBOLS.contains(input.symbol()) || !validNote(input.thesis(), 500) ||
-            !EMOTIONS.contains(input.emotion())) {
-            throw new IllegalArgumentException("Manual paper approval, supported pair and valid journal required");
+        if (input == null || !input.confirmPaperOnly()
+            || !SYMBOLS.contains(input.symbol())
+            || !validNote(input.thesis(), 500)
+            || !EMOTIONS.contains(input.emotion())) {
+            throw new IllegalArgumentException(
+                "Manual paper approval, supported pair and valid journal required");
         }
-        String requestId=uuid(input.requestId());
-        // Account mutex provides transaction serialization for cash/risk/idempotency.
-        double cash=lockedCash();
-        List<PaperPosition> existing=jdbc.query("""
+
+        String requestId = uuid(input.requestId());
+
+        // Account mutex serializes cash, risk and idempotency checks.
+        double cash = lockedCash();
+
+        List<PaperPosition> existing = jdbc.query("""
             SELECT * FROM paper_positions WHERE request_id=?
-            """, this::mapPosition,requestId);
+            """, this::mapPosition, requestId);
+
         if (!existing.isEmpty()) {
-            PaperPosition previous=existing.getFirst();
+            PaperPosition previous = existing.getFirst();
+
             if (!previous.symbol().equals(input.symbol())
-                || Double.compare(previous.entryPrice(),input.entryPrice())!=0
-                || Double.compare(previous.stopPrice(),input.stopPrice())!=0
-                || Double.compare(previous.targetPrice(),input.targetPrice())!=0) {
-                throw new IllegalArgumentException("Request id reused for different paper trade");
+                || Double.compare(previous.entryPrice(), input.entryPrice()) != 0
+                || Double.compare(previous.stopPrice(), input.stopPrice()) != 0
+                || Double.compare(previous.targetPrice(), input.targetPrice()) != 0) {
+                throw new IllegalArgumentException(
+                    "Request id reused for different paper trade");
             }
+
             return previous;
         }
-        Integer opened=jdbc.queryForObject(
-            "SELECT COUNT(*) FROM paper_positions WHERE status='OPEN'",Integer.class);
-        if (opened!=null && opened>=2) {
-            throw new IllegalArgumentException("Maximum two simultaneous paper positions");
+
+        Integer opened = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM paper_positions WHERE status='OPEN'",
+            Integer.class);
+
+        if (opened != null && opened >= 2) {
+            throw new IllegalArgumentException(
+                "Maximum two simultaneous paper positions");
         }
-        double starting=startingBalance();
-        long now=System.currentTimeMillis();
-        LocalDate today=Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).toLocalDate();
-        long todayMs=today.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-        long weekMs=today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-        // Loss limits are conservative: sum of realized losing trades, not net wins.
-        if (realizedLossSince(todayMs)>=starting*.02
-            || realizedLossSince(weekMs)>=starting*.05) {
-            throw new IllegalArgumentException("Paper daily or weekly loss limit reached");
+
+        double starting = startingBalance();
+        long now = System.currentTimeMillis();
+
+        LocalDate today = Instant.ofEpochMilli(now)
+            .atZone(ZoneOffset.UTC).toLocalDate();
+
+        long todayMs = today.atStartOfDay(ZoneOffset.UTC)
+            .toInstant().toEpochMilli();
+
+        long weekMs = today
+            .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            .atStartOfDay(ZoneOffset.UTC)
+            .toInstant().toEpochMilli();
+
+        // Conservative limits: sum realized losing trades, not net wins.
+        if (realizedLossSince(todayMs) >= starting * .02
+            || realizedLossSince(weekMs) >= starting * .05) {
+            throw new IllegalArgumentException(
+                "Paper daily or weekly loss limit reached");
         }
-        RiskPlan plan=risk.calculate(cash,input.entryPrice(),input.stopPrice(),input.targetPrice());
-        if (!plan.valid() || plan.quantity()<=0) {
-            throw new IllegalArgumentException("Proposed paper trade fails risk/reward checks");
+
+        RiskPlan plan = risk.calculate(
+            cash, input.entryPrice(), input.stopPrice(), input.targetPrice());
+
+        if (!plan.valid() || plan.quantity() <= 0) {
+            throw new IllegalArgumentException(
+                "Proposed paper trade fails risk/reward checks");
         }
-        double entryCash=plan.quantity()*input.entryPrice()*(1+sideCost);
-        if (entryCash>cash+1e-7) throw new IllegalArgumentException("Insufficient virtual cash");
-        String id=UUID.randomUUID().toString();
+
+        double entryCash =
+            plan.quantity() * input.entryPrice() * (1 + sideCost);
+
+        if (entryCash > cash + 1e-7) {
+            throw new IllegalArgumentException("Insufficient virtual cash");
+        }
+
+        String id = UUID.randomUUID().toString();
+
         jdbc.update("""
             INSERT INTO paper_positions
               (id,request_id,symbol,entry_price,stop_price,target_price,quantity,
                entry_cash_usdt,opened_at_ms,status,thesis,emotion)
             VALUES (?,?,?,?,?,?,?,?,?,'OPEN',?,?)
-            """,id,requestId,input.symbol(),input.entryPrice(),input.stopPrice(),
-            input.targetPrice(),plan.quantity(),entryCash,now,
-            input.thesis().trim(),input.emotion());
-        jdbc.update("UPDATE paper_account SET cash_usdt=cash_usdt-? WHERE id=1",entryCash);
+            """,
+            id, requestId, input.symbol(), input.entryPrice(),
+            input.stopPrice(), input.targetPrice(), plan.quantity(),
+            entryCash, now, input.thesis().trim(), input.emotion());
+
+        jdbc.update(
+            "UPDATE paper_account SET cash_usdt=cash_usdt-? WHERE id=1",
+            entryCash);
+
         return get(id);
     }
 
     @Transactional
     public PaperPosition close(String id, ClosePaperRequest input) {
-        if (input==null || !input.confirmPaperOnly()
-            || !Double.isFinite(input.exitPrice()) || input.exitPrice()<=0
+        if (input == null || !input.confirmPaperOnly()
+            || !Double.isFinite(input.exitPrice()) || input.exitPrice() <= 0
             || !EXIT_REASONS.contains(input.exitReason())
-            || !validNote(input.reflection(),2000)) {
-            throw new IllegalArgumentException("Manual paper closure and reflection required");
+            || !validNote(input.reflection(), 2000)) {
+            throw new IllegalArgumentException(
+                "Manual paper closure and reflection required");
         }
+
         lockedCash();
-        PaperPosition position=get(uuid(id));
-        if (position.status().equals("CLOSED")) return position;
-        double proceeds=position.quantity()*input.exitPrice()*(1-sideCost);
-        double pnl=proceeds-position.entryCashUsdt();
-        long now=System.currentTimeMillis();
-        int count=jdbc.update("""
+
+        PaperPosition position = get(uuid(id));
+
+        if (position.status().equals("CLOSED")) {
+            return position;
+        }
+
+        double proceeds =
+            position.quantity() * input.exitPrice() * (1 - sideCost);
+
+        double pnl = proceeds - position.entryCashUsdt();
+        long now = System.currentTimeMillis();
+
+        int count = jdbc.update("""
             UPDATE paper_positions SET status='CLOSED',close_price=?,
               close_cash_usdt=?,net_pnl_usdt=?,closed_at_ms=?,
               exit_reason=?,reflection=? WHERE id=? AND status='OPEN'
-            """,input.exitPrice(),proceeds,pnl,now,input.exitReason(),
-            input.reflection().trim(),position.id());
-        if (count!=1) throw new IllegalStateException("Paper close conflict");
-        jdbc.update("UPDATE paper_account SET cash_usdt=cash_usdt+? WHERE id=1",proceeds);
+            """,
+            input.exitPrice(), proceeds, pnl, now,
+            input.exitReason(), input.reflection().trim(), position.id());
+
+        if (count != 1) {
+            throw new IllegalStateException("Paper close conflict");
+        }
+
+        jdbc.update(
+            "UPDATE paper_account SET cash_usdt=cash_usdt+? WHERE id=1",
+            proceeds);
+
         return get(position.id());
     }
 
-    @Transactional(readOnly=true)
+    @Transactional(readOnly = true)
     public PaperPosition get(String id) {
-        List<PaperPosition> rows=jdbc.query(
-            "SELECT * FROM paper_positions WHERE id=?",this::mapPosition,uuid(id));
-        if (rows.isEmpty()) throw new IllegalArgumentException("Unknown paper position");
+        List<PaperPosition> rows = jdbc.query(
+            "SELECT * FROM paper_positions WHERE id=?",
+            this::mapPosition, uuid(id));
+
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("Unknown paper position");
+        }
+
         return rows.getFirst();
     }
 
-    @Transactional(readOnly=true)
+    @Transactional(readOnly = true)
     public List<PaperPosition> recent() {
-        return jdbc.query("SELECT * FROM paper_positions ORDER BY opened_at_ms DESC LIMIT 100",
-            this::mapPosition);
+        return jdbc.query("""
+            SELECT * FROM paper_positions
+            ORDER BY opened_at_ms DESC LIMIT 100
+            """, this::mapPosition);
     }
 
-    @Transactional(readOnly=true)
+    @Transactional(readOnly = true)
     public PaperSummary summary() {
-        double starting=startingBalance();
-        double cash=jdbc.queryForObject(
-            "SELECT cash_usdt FROM paper_account WHERE id=1",Double.class);
-        double reserved=jdbc.queryForObject("""
-            SELECT COALESCE(SUM(entry_cash_usdt),0) FROM paper_positions WHERE status='OPEN'
-            """,Double.class);
-        int opened=jdbc.queryForObject(
-            "SELECT COUNT(*) FROM paper_positions WHERE status='OPEN'",Integer.class);
-        int closed=jdbc.queryForObject(
-            "SELECT COUNT(*) FROM paper_positions WHERE status='CLOSED'",Integer.class);
-        double pnl=jdbc.queryForObject("""
-            SELECT COALESCE(SUM(net_pnl_usdt),0) FROM paper_positions WHERE status='CLOSED'
-            """,Double.class);
-        return new PaperSummary(starting,cash,reserved,opened,closed,pnl,
-            "Hypothetical user-entered prices, not verified fills; open P&L not marked to market");
+        double starting = startingBalance();
+
+        double cash = jdbc.queryForObject(
+            "SELECT cash_usdt FROM paper_account WHERE id=1",
+            Double.class);
+
+        double reserved = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(entry_cash_usdt),0)
+            FROM paper_positions WHERE status='OPEN'
+            """, Double.class);
+
+        int opened = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM paper_positions WHERE status='OPEN'",
+            Integer.class);
+
+        int closed = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM paper_positions WHERE status='CLOSED'",
+            Integer.class);
+
+        double pnl = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(net_pnl_usdt),0)
+            FROM paper_positions WHERE status='CLOSED'
+            """, Double.class);
+
+        String limitation =
+            "Public ticker prices with estimated exit costs; not verified fills.";
+
+        // No open positions: cash is the whole portfolio value.
+        if (opened == 0) {
+            return new PaperSummary(
+                starting, cash, reserved, opened, closed, pnl,
+                0.0, cash, "AVAILABLE_NO_OPEN_POSITIONS",
+                null, limitation);
+        }
+
+        try {
+            List<PaperPosition> openPositions = jdbc.query("""
+                SELECT * FROM paper_positions WHERE status='OPEN'
+                """, this::mapPosition);
+
+            double unrealizedPnl = 0.0;
+            double liquidationValue = 0.0;
+
+            for (PaperPosition position : openPositions) {
+                double price =
+                    currentPriceProvider.fetchCurrentPrice(position.symbol());
+
+                if (!Double.isFinite(price) || price <= 0) {
+                    throw new IllegalStateException(
+                        "Invalid market price");
+                }
+
+                double estimatedExitValue =
+                    position.quantity() * price * (1 - sideCost);
+
+                liquidationValue += estimatedExitValue;
+
+                unrealizedPnl +=
+                    estimatedExitValue - position.entryCashUsdt();
+            }
+
+            return new PaperSummary(
+                starting,
+                cash,
+                reserved,
+                opened,
+                closed,
+                pnl,
+                unrealizedPnl,
+                cash + liquidationValue,
+                "AVAILABLE",
+                System.currentTimeMillis(),
+                limitation);
+
+        } catch (RuntimeException e) {
+            // Never show partial valuation as complete portfolio equity.
+            return new PaperSummary(
+                starting,
+                cash,
+                reserved,
+                opened,
+                closed,
+                pnl,
+                null,
+                null,
+                "UNAVAILABLE",
+                null,
+                limitation + " Market price retrieval failed.");
+        }
     }
 
     private double lockedCash() {
-        Double cash=jdbc.queryForObject(
-            "SELECT cash_usdt FROM paper_account WHERE id=1 FOR UPDATE",Double.class);
-        if(cash==null)throw new IllegalStateException("Paper account not initialized");
+        Double cash = jdbc.queryForObject(
+            "SELECT cash_usdt FROM paper_account WHERE id=1 FOR UPDATE",
+            Double.class);
+
+        if (cash == null) {
+            throw new IllegalStateException(
+                "Paper account not initialized");
+        }
+
         return cash;
     }
 
     private double startingBalance() {
         return jdbc.queryForObject(
-            "SELECT starting_balance_usdt FROM paper_account WHERE id=1",Double.class);
+            "SELECT starting_balance_usdt FROM paper_account WHERE id=1",
+            Double.class);
     }
 
     private double realizedLossSince(long startMs) {
         return jdbc.queryForObject("""
-            SELECT COALESCE(SUM(CASE WHEN net_pnl_usdt<0 THEN -net_pnl_usdt ELSE 0 END),0)
-            FROM paper_positions WHERE status='CLOSED' AND closed_at_ms>=?
-            """,Double.class,startMs);
+            SELECT COALESCE(
+                SUM(CASE WHEN net_pnl_usdt<0 THEN -net_pnl_usdt ELSE 0 END),0)
+            FROM paper_positions
+            WHERE status='CLOSED' AND closed_at_ms>=?
+            """, Double.class, startMs);
     }
 
-    private PaperPosition mapPosition(java.sql.ResultSet rs,int row) throws java.sql.SQLException {
-        return new PaperPosition(rs.getString("id"),rs.getString("request_id"),rs.getString("symbol"),
-            rs.getDouble("entry_price"),rs.getDouble("stop_price"),rs.getDouble("target_price"),
-            rs.getDouble("quantity"),rs.getDouble("entry_cash_usdt"),rs.getLong("opened_at_ms"),
-            rs.getString("status"), (Double)rs.getObject("close_price"),
-            (Double)rs.getObject("close_cash_usdt"),(Double)rs.getObject("net_pnl_usdt"),
-            (Long)rs.getObject("closed_at_ms"),rs.getString("thesis"),
-            rs.getString("emotion"),rs.getString("exit_reason"),rs.getString("reflection"));
+    private PaperPosition mapPosition(
+        java.sql.ResultSet rs, int row) throws java.sql.SQLException {
+
+        return new PaperPosition(
+            rs.getString("id"),
+            rs.getString("request_id"),
+            rs.getString("symbol"),
+            rs.getDouble("entry_price"),
+            rs.getDouble("stop_price"),
+            rs.getDouble("target_price"),
+            rs.getDouble("quantity"),
+            rs.getDouble("entry_cash_usdt"),
+            rs.getLong("opened_at_ms"),
+            rs.getString("status"),
+            (Double) rs.getObject("close_price"),
+            (Double) rs.getObject("close_cash_usdt"),
+            (Double) rs.getObject("net_pnl_usdt"),
+            (Long) rs.getObject("closed_at_ms"),
+            rs.getString("thesis"),
+            rs.getString("emotion"),
+            rs.getString("exit_reason"),
+            rs.getString("reflection"));
     }
 
-    private static boolean validNote(String s,int max) {
-        return s!=null && !s.isBlank() && s.length()<=max;
+    private static boolean validNote(String s, int max) {
+        return s != null && !s.isBlank() && s.length() <= max;
     }
+
     private static String uuid(String value) {
-        try { return UUID.fromString(value).toString(); }
-        catch (RuntimeException e) { throw new IllegalArgumentException("Invalid UUID",e); }
+        try {
+            return UUID.fromString(value).toString();
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("Invalid UUID", e);
+        }
     }
 }
