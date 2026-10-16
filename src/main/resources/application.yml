@@ -52,7 +52,8 @@ trading:
     api-key: ${BINANCE_READ_API_KEY:}
     api-secret: ${BINANCE_READ_API_SECRET:}
     daily-enabled: ${BINANCE_ACCOUNT_DAILY_ENABLED:false}
-    daily-cron: "0 0 9 * * *"
+    daily-poll-ms: ${BINANCE_ACCOUNT_POLL_MS:900000}
+    daily-initial-delay-ms: ${BINANCE_ACCOUNT_INITIAL_DELAY_MS:30000}
     daily-bot-token: ${TELEGRAM_BOT_TOKEN:}
     daily-private-chat-id: ${BINANCE_PRIVATE_CHAT_ID:}
 logging:
